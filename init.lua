@@ -6,8 +6,8 @@ vim.g.maplocalleader = ' '
 vim.o.textwidth = 100
 vim.o.colorcolumn = '100'
 vim.o.wrap = false
-vim.opt.formatoptions:append('n')   -- auto-wrap at textwidth while typing
-vim.opt.formatoptions:append('t')   -- recognize numbered lists when wrapping
+vim.opt.formatoptions:append('n')   -- recognize numbered lists when wrapping
+vim.opt.formatoptions:append('t')   -- auto-wrap at textwidth while typing
 
 vim.o.sidescrolloff = 10
 
@@ -35,6 +35,7 @@ vim.o.splitkeep = 'screen'
 vim.o.list = true
 vim.opt.listchars = {
     trail = '_',
+    tab = '-->',
 }
 
 vim.o.foldminlines = 5
@@ -44,6 +45,10 @@ vim.o.mouse = ''
 vim.o.signcolumn = 'yes'
 
 vim.o.pumheight = 10
+
+vim.g.netrw_winsize = 30
+vim.g.netrw_banner = 0
+vim.g.netrw_browse_split = 4
 
 vim.o.keymap = 'russian-jcukenwin'
 vim.o.langmap = 'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJKLMNOPQRSTUVWXYZ,фисвуапршолдьтщзйкыегмцчня;abcdefghijklmnopqrstuvwxyz'
@@ -80,7 +85,9 @@ vim.keymap.set('n', '<leader>ds', '<cmd>Pick lsp scope="document_symbol"<cr>')
 -- Filetype
 
 vim.filetype.add({
-    h = 'c',
+    extension = {
+        h = 'c',
+    },
 })
 
 vim.api.nvim_create_autocmd('FileType', {
@@ -104,6 +111,15 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
     pattern = 'man',
     callback = function(event)
         vim.wo.wrap = false
+    end,
+})
+
+-- Treesitter highlighting
+
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = { 'c', 'lua' },
+    callback = function()
+        pcall(vim.treesitter.start)
     end,
 })
 
@@ -247,11 +263,10 @@ end)
 vim.keymap.set('v', '<leader>d', '"_d', { noremap = true })
 vim.keymap.set('v', '<leader>c', '"_c', { noremap = true })
 vim.keymap.set('n', '<leader>C', '"_C', { noremap = true })
-
 -- Switch between two last opened files
 vim.keymap.set('n', '\\', '<c-^>', { noremap = true })
 
--- Indent multiple times in visual mode multiple times in a row
+-- Indent in visual mode multiple times in a row
 vim.keymap.set('v', '<', '<gv', { noremap = true })
 vim.keymap.set('v', '>', '>gv', { noremap = true })
 
@@ -270,5 +285,101 @@ vim.keymap.set('n', '<a-n>', '<cmd>set nohls<cr>/\\v(_|..>|.<|$)/s+1<cr><cmd>let
 vim.keymap.set('n', '<a-p>', '<cmd>set nohls<cr>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { noremap = true, silent = true })
 vim.keymap.set('v', '<a-n>', '<cmd>set nohls<cr><esc>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
 vim.keymap.set('v', '<a-p>', '<cmd>set nohls<cr><esc>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
+
+-- Open the folder containing the current file in Netrw
+vim.keymap.set('n', '<leader>o', '<cmd>Lex %:p:h<cr>')
+
+-- Open the current working directory in Netrw
+vim.keymap.set('n', '<leader>e', '<cmd>Lex<cr>')
+
+-- Keymaps specific to the Netrw buffer
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = 'netrw',
+    callback = function(event)
+        -- :cd into the directory currently opened in Netrw
+        vim.keymap.set('n', '`', function()
+            vim.cmd('cd ' .. vim.b.netrw_curdir)
+        end, { buffer = event.buf })
+
+        -- Create a new file (the default '%' is bugged)
+        vim.keymap.set('n', '<leader>%', function()
+            local file_name = vim.fn.input('New file: ', '', 'file')
+            vim.cmd('vsp ' .. vim.b.netrw_curdir .. '/' .. file_name)
+        end, { buffer = event.buf })
+    end,
+})
+
+-- Surround with X keymaps
+vim.keymap.set('v', '<leader>(', 'c()<c-c>P')
+vim.keymap.set('v', '<leader>[', 'c[]<c-c>P')
+vim.keymap.set('v', '<leader>{', 'c{}<c-c>P')
+vim.keymap.set('v', '<leader>}', 'c{  }<c-c>hP]}')
+vim.keymap.set('v', "<leader>'", "c''<c-c>P")
+vim.keymap.set('v', '<leader>"', 'c""<c-c>P')
+
+-- Quickly open or switch to a tab with a terminal
+vim.keymap.set('n', '<f1>', function()
+    vim.g.quick_term_prev_window = vim.fn.win_getid()
+
+    if vim.g.quick_term_window == nil or vim.fn.winbufnr(vim.g.quick_term_window) == -1 then
+        vim.cmd('tabnew')
+        vim.cmd('ter')
+        vim.cmd('file term_' .. vim.fn.win_getid())
+        vim.g.quick_term_window = vim.fn.win_getid()
+    else
+        vim.fn.win_gotoid(vim.g.quick_term_window)
+    end
+
+    vim.api.nvim_feedkeys('i', 'n', false)
+end)
+vim.keymap.set('t', '<f1>', function()
+    if
+        vim.g.quick_term_prev_window ~= nil and
+        vim.fn.winbufnr(vim.g.quick_term_window) ~= -1
+    then
+        vim.fn.win_gotoid(vim.g.quick_term_prev_window)
+    end
+end)
+
+-- Delete the current buffer without changing the window layout
+-- A copy-paste from there: https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bufdelete.lua
+vim.keymap.set('n', '<leader>x', function()
+    local buf = vim.api.nvim_get_current_buf()
+
+    vim.api.nvim_buf_call(buf, function()
+        if vim.bo.modified then
+            return
+        end
+
+        for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+            vim.api.nvim_win_call(win, function()
+                if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_buf(win) ~= buf then
+                    return
+                end
+
+                -- Try using alternate buffer
+                local alt = vim.fn.bufnr('#')
+                if alt ~= buf and vim.fn.buflisted(alt) == 1 then
+                    vim.api.nvim_win_set_buf(win, alt)
+                    return
+                end
+
+                -- Try using previous buffer
+                local has_previous = pcall(vim.cmd, 'bprevious')
+                    if has_previous and buf ~= vim.api.nvim_win_get_buf(win) then
+                    return
+                end
+
+                -- Create new listed buffer
+                local new_buf = vim.api.nvim_create_buf(true, false)
+                vim.api.nvim_win_set_buf(win, new_buf)
+            end)
+        end
+
+        if vim.api.nvim_buf_is_valid(buf) then
+            pcall(vim.cmd, 'bdelete! ' .. buf)
+        end
+    end)
+end)
 
 -- vim: et:sw=4
