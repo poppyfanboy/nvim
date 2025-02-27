@@ -45,6 +45,7 @@ vim.o.mouse = ''
 vim.o.signcolumn = 'yes'
 
 vim.o.pumheight = 10
+vim.opt.completeopt = { 'menu' }
 
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
@@ -62,7 +63,10 @@ vim.cmd('hi IndentLine guifg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID
 vim.cmd('hi IndentLineCurrent guifg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID('CursorLineNr')), 'fg', 'gui'))
 vim.cmd('hi! ColorColumn guibg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID('CursorColumn')), 'bg', 'gui'))
 
-require('indentmini').setup()
+local ok_indentmini, indentmini = pcall(require, 'indentmini')
+if ok_indentmini then
+    indentmini.setup()
+end
 
 vim.api.nvim_create_autocmd('TextYankPost', {
     group = vim.api.nvim_create_augroup('highlight_yank', {}),
@@ -74,13 +78,19 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 
 -- A picker plugin for selecting items from LSP, files, etc.
 
-require('mini.pick').setup()
-require('mini.extra').setup()
+local ok_mini_pick, mini_pick = pcall(require, 'mini.pick')
+if ok_mini_pick then
+    mini_pick.setup()
+    vim.keymap.set('n', '<leader>sf', '<cmd>Pick files<cr>')
+    vim.keymap.set('n', '<leader>sg', '<cmd>Pick grep_live<cr>')
+end
 
-vim.keymap.set('n', '<leader>sf', '<cmd>Pick files<cr>')
-vim.keymap.set('n', '<leader>sg', '<cmd>Pick grep_live<cr>')
-vim.keymap.set('n', '<leader>/', '<cmd>Pick buf_lines<cr>')
-vim.keymap.set('n', '<leader>ds', '<cmd>Pick lsp scope="document_symbol"<cr>')
+local ok_mini_extra, mini_extra = pcall(require, 'mini.extra')
+if ok_mini_extra then
+    mini_extra.setup()
+    vim.keymap.set('n', '<leader>/', '<cmd>Pick buf_lines<cr>')
+    vim.keymap.set('n', '<leader>ds', '<cmd>Pick lsp scope="document_symbol"<cr>')
+end
 
 -- Filetype
 
@@ -127,31 +137,48 @@ vim.api.nvim_create_autocmd('FileType', {
 
 vim.lsp.set_log_level(vim.log.levels.OFF)
 
-vim.api.nvim_create_autocmd('FileType', {
-    pattern = 'c',
-    callback = function(event)
-        vim.lsp.start({
-            name = 'clangd',
-            cmd = { 'clangd', '--header-insertion=never' },
-            root_dir = vim.fs.root(event.buf, { '.git' }),
-        })
-    end,
-})
+if vim.fn.executable('clangd') == 1 then
+    vim.api.nvim_create_autocmd('FileType', {
+        pattern = 'c',
+        callback = function(event)
+            vim.lsp.start({
+                name = 'clangd',
+                cmd = { 'clangd', '--header-insertion=never' },
+                root_dir = vim.fs.root(event.buf, { '.git' }),
+            })
+        end,
+    })
+end
 
-require('mini.completion').setup({
-    source_func = 'omnifunc',
-    auto_setup = false,
-    delay = { completion = 200, info = 200, signature = 100 },
-})
+local ok_mini_completion, mini_completion = pcall(require, 'mini.completion')
+if ok_mini_completion then
+    mini_completion.setup({
+        source_func = 'omnifunc',
+        auto_setup = false,
+        delay = { completion = 100, info = 200, signature = 10e7 },
+    })
+end
 
 vim.api.nvim_create_autocmd('LspAttach', {
     callback = function(event)
-        vim.bo[event.buf].omnifunc = 'v:lua.MiniCompletion.completefunc_lsp'
+        if ok_mini_completion then
+            vim.bo[event.buf].omnifunc = 'v:lua.MiniCompletion.completefunc_lsp'
+        end
 
         vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = event.buf })
         vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = event.buf })
         vim.keymap.set('n', '<leader>gr', vim.lsp.buf.references, { buffer = event.buf })
-        vim.keymap.set('n', '<c-j>', vim.lsp.buf.signature_help, { buffer = event.buf })
+
+        vim.keymap.set({ 'i', 'n' }, '<c-s>', vim.lsp.buf.signature_help, { buffer = event.buf })
+
+        vim.keymap.set({ 'i', 'n' }, '<c-j>', function()
+            for _, window in ipairs(vim.api.nvim_list_wins()) do
+                local config = vim.api.nvim_win_get_config(window)
+                if config.relative ~= '' then
+                    vim.api.nvim_win_close(window, false)
+                end
+            end
+        end, { buffer = event.buf })
 
         vim.keymap.set('n', '<leader>i', function()
             vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
@@ -263,6 +290,7 @@ end)
 vim.keymap.set('v', '<leader>d', '"_d', { noremap = true })
 vim.keymap.set('v', '<leader>c', '"_c', { noremap = true })
 vim.keymap.set('n', '<leader>C', '"_C', { noremap = true })
+
 -- Switch between two last opened files
 vim.keymap.set('n', '\\', '<c-^>', { noremap = true })
 
@@ -321,13 +349,20 @@ vim.keymap.set('v', '<leader>"', 'c""<c-c>P')
 vim.keymap.set('n', '<f1>', function()
     vim.g.quick_term_prev_window = vim.fn.win_getid()
 
-    if vim.g.quick_term_window == nil or vim.fn.winbufnr(vim.g.quick_term_window) == -1 then
+    if vim.g.quick_term_buffer == nil or vim.fn.bufexists(vim.g.quick_term_buffer) == 0 then
         vim.cmd('tabnew')
         vim.cmd('ter')
         vim.cmd('file term_' .. vim.fn.win_getid())
         vim.g.quick_term_window = vim.fn.win_getid()
+        vim.g.quick_term_buffer = vim.fn.winbufnr(vim.g.quick_term_window)
     else
-        vim.fn.win_gotoid(vim.g.quick_term_window)
+        if vim.fn.winbufnr(vim.g.quick_term_window) == vim.g.quick_term_buffer then
+            vim.fn.win_gotoid(vim.g.quick_term_window)
+        else
+            vim.cmd('tabnew')
+            vim.cmd('b ' .. vim.g.quick_term_buffer)
+            vim.g.quick_term_window = vim.fn.win_getid()
+        end
     end
 
     vim.api.nvim_feedkeys('i', 'n', false)
@@ -342,7 +377,7 @@ vim.keymap.set('t', '<f1>', function()
 end)
 
 -- Delete the current buffer without changing the window layout
--- A copy-paste from there: https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bufdelete.lua
+-- A copy-paste from here: https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bufdelete.lua
 vim.keymap.set('n', '<leader>x', function()
     local buf = vim.api.nvim_get_current_buf()
 
