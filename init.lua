@@ -45,7 +45,7 @@ vim.o.mouse = ''
 vim.o.signcolumn = 'yes'
 
 vim.o.pumheight = 10
-vim.opt.completeopt = { 'menu' }
+vim.opt.completeopt:remove('preview')
 
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
@@ -144,7 +144,7 @@ if vim.fn.executable('clangd') == 1 then
             vim.lsp.start({
                 name = 'clangd',
                 cmd = { 'clangd', '--header-insertion=never' },
-                root_dir = vim.fs.root(event.buf, { '.git' }),
+                root_dir = vim.fs.root(event.buf, { '.clangd', 'compile_flags.txt', '.git' }),
             })
         end,
     })
@@ -193,14 +193,14 @@ vim.keymap.set('n', '<leader>dp', vim.diagnostic.open_float)
 -- Keymaps
 
 -- Faster <c-e>/<c-y> scrolling
-vim.keymap.set('n', '<c-e>', '5<c-e>', { noremap = true })
-vim.keymap.set('n', '<c-y>', '5<c-y>', { noremap = true })
+vim.keymap.set('n', '<c-e>', '5<c-e>')
+vim.keymap.set('n', '<c-y>', '5<c-y>')
 
 -- Horizontal scrolling
-vim.keymap.set('n', '<a-h>', '15zh', { noremap = true })
-vim.keymap.set('n', '<a-l>', '15zl', { noremap = true })
-vim.keymap.set('i', '<a-h>', '<c-o>15zh', { noremap = true })
-vim.keymap.set('i', '<a-l>', '<c-o>15zl', { noremap = true })
+vim.keymap.set('n', '<a-h>', '15zh')
+vim.keymap.set('n', '<a-l>', '15zl')
+vim.keymap.set('i', '<a-h>', '<c-o>15zh')
+vim.keymap.set('i', '<a-l>', '<c-o>15zl')
 
 -- Quickfix
 vim.keymap.set('n', '<leader>co', vim.cmd.copen)
@@ -222,24 +222,24 @@ end)
 vim.keymap.set('n', '<leader>nh', '<cmd>let @/ = ""<cr>')
 
 -- Exit terminal mode
-vim.keymap.set('t', '<esc><esc>', '<c-\\><c-n>', { noremap = true })
+vim.keymap.set('t', '<esc><esc>', '<c-\\><c-n>')
 
 -- Move between tabs
 vim.keymap.set('n', '[t', vim.cmd.tabprevious)
 vim.keymap.set('n', ']t', vim.cmd.tabnext)
 
 -- Add empty lines above/below
-vim.keymap.set('n', '[<space>', 'mzO<esc>0D`z', { noremap = true })
-vim.keymap.set('n', ']<space>', 'mzo<esc>0D`z', { noremap = true })
+vim.keymap.set('n', '[<space>', 'mzO<esc>0D`z')
+vim.keymap.set('n', ']<space>', 'mzo<esc>0D`z')
 
 -- Join with the line below while keeping the cursor in place
-vim.keymap.set('n', 'J', 'mzJ`z', { noremap = true })
+vim.keymap.set('n', 'J', 'mzJ`z')
 
 -- Resize splits
-vim.keymap.set('n', '<left>', '10<c-w><', { noremap = true })
-vim.keymap.set('n', '<right>', '10<c-w>>', { noremap = true })
-vim.keymap.set('n', '<up>', '5<c-w>-', { noremap = true })
-vim.keymap.set('n', '<down>', '5<c-w>+', { noremap = true })
+vim.keymap.set('n', '<left>', '10<c-w><')
+vim.keymap.set('n', '<right>', '10<c-w>>')
+vim.keymap.set('n', '<up>', '5<c-w>-')
+vim.keymap.set('n', '<down>', '5<c-w>+')
 
 -- Command mode: Ctrl+Enter to accept completion / Escape to cancel
 vim.keymap.set('c', '<c-cr>', function()
@@ -269,7 +269,7 @@ vim.keymap.set('n', '<c-l>', function()
         vim.o.iminsert = 1
     end
 end)
-vim.keymap.set({ 'i', 'c' }, '<c-l>', '<c-^>', { noremap = true })
+vim.keymap.set({ 'i', 'c' }, '<c-l>', '<c-^>')
 
 -- Create/destroy treesitter folds
 vim.keymap.set('n', '<leader>fo', function()
@@ -287,32 +287,32 @@ vim.keymap.set('n', '<leader>fo', function()
 end)
 
 -- Delete to void register
-vim.keymap.set('v', '<leader>d', '"_d', { noremap = true })
-vim.keymap.set('v', '<leader>c', '"_c', { noremap = true })
-vim.keymap.set('n', '<leader>C', '"_C', { noremap = true })
+vim.keymap.set('v', '<leader>d', '"_d')
+vim.keymap.set('v', '<leader>c', '"_c')
+vim.keymap.set('n', '<leader>C', '"_C')
 
 -- Switch between two last opened files
-vim.keymap.set('n', '\\', '<c-^>', { noremap = true })
+vim.keymap.set('n', '\\', '<c-^>')
 
 -- Indent in visual mode multiple times in a row
-vim.keymap.set('v', '<', '<gv', { noremap = true })
-vim.keymap.set('v', '>', '>gv', { noremap = true })
+vim.keymap.set('v', '<', '<gv')
+vim.keymap.set('v', '>', '>gv')
 
 -- Replace a word under the cursor (dot-repeatable)
-vim.keymap.set('n', '<leader>rw', '*``cgn', { noremap = true })
-vim.keymap.set('v', '<leader>rw', '"zy/<c-r>z<cr>``cgn', { noremap = true })
+vim.keymap.set('n', '<leader>rw', '*``"_cgn')
+vim.keymap.set('v', '<leader>rw', '"zy/<c-r>z<cr>``"_cgn')
 
 -- MoveThroughWordsInCamelCasedIdentifiers
-vim.keymap.set('n', '<a-.>', '<cmd>set nohls<cr>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { noremap = true, silent = true })
-vim.keymap.set('n', '<a-,>', '<cmd>set nohls<cr>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { noremap = true, silent = true })
-vim.keymap.set('v', '<a-.>', '<cmd>set nohls<cr><esc>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
-vim.keymap.set('v', '<a-,>', '<cmd>set nohls<cr><esc>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
+vim.keymap.set('n', '<a-.>', '<cmd>set nohls<cr>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
+vim.keymap.set('n', '<a-,>', '<cmd>set nohls<cr>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
+vim.keymap.set('v', '<a-.>', '<cmd>set nohls<cr><esc>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
+vim.keymap.set('v', '<a-,>', '<cmd>set nohls<cr><esc>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
 
 -- Move_though_words_in_snake_cased_identifiers
-vim.keymap.set('n', '<a-n>', '<cmd>set nohls<cr>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { noremap = true, silent = true })
-vim.keymap.set('n', '<a-p>', '<cmd>set nohls<cr>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { noremap = true, silent = true })
-vim.keymap.set('v', '<a-n>', '<cmd>set nohls<cr><esc>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
-vim.keymap.set('v', '<a-p>', '<cmd>set nohls<cr><esc>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { noremap = true, silent = true })
+vim.keymap.set('n', '<a-n>', '<cmd>set nohls<cr>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
+vim.keymap.set('n', '<a-p>', '<cmd>set nohls<cr>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
+vim.keymap.set('v', '<a-n>', '<cmd>set nohls<cr><esc>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
+vim.keymap.set('v', '<a-p>', '<cmd>set nohls<cr><esc>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
 
 -- Open the folder containing the current file in Netrw
 vim.keymap.set('n', '<leader>o', '<cmd>Lex %:p:h<cr>')
@@ -338,12 +338,13 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 
 -- Surround with X keymaps
-vim.keymap.set('v', '<leader>(', 'c()<c-c>P')
-vim.keymap.set('v', '<leader>[', 'c[]<c-c>P')
-vim.keymap.set('v', '<leader>{', 'c{}<c-c>P')
-vim.keymap.set('v', '<leader>}', 'c{  }<c-c>hP]}')
-vim.keymap.set('v', "<leader>'", "c''<c-c>P")
-vim.keymap.set('v', '<leader>"', 'c""<c-c>P')
+vim.keymap.set('v', '<leader>(', '<cmd>let @z=@"<cr>c()<c-c>gP<cmd>let @"=@z<cr>')
+vim.keymap.set('v', '<leader>[', '<cmd>let @z=@"<cr>c[]<c-c>gP<cmd>let @"=@z<cr>')
+vim.keymap.set('v', '<leader>{', '<cmd>let @z=@"<cr>c{}<c-c>gP<cmd>let @"=@z<cr>')
+vim.keymap.set('v', '<leader>}', '<cmd>let @z=@"<cr>c{  }<c-c>hgP<cmd>let @"=@z<cr>l')
+vim.keymap.set('v', '<leader>\'', '<cmd>let @z=@"<cr>c\'\'<c-c>gP<cmd>let @"=@z<cr>')
+vim.keymap.set('v', '<leader>"', '<cmd>let @z=@"<cr>c""<c-c>gP<cmd>let @"=@z<cr>')
+vim.keymap.set('v', '<leader>`', '<cmd>let @z=@"<cr>c``<c-c>gP<cmd>let @"=@z<cr>')
 
 -- Quickly open or switch to a tab with a terminal
 vim.keymap.set('n', '<f1>', function()
