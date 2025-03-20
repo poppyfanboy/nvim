@@ -20,6 +20,10 @@ vim.o.tabstop = 4
 vim.o.shiftwidth = 0
 vim.o.smartindent = true
 vim.o.shiftround = true
+vim.opt.cinoptions = {
+    'l1',   -- disable the default weird indentation within the switch cases
+    ':0',   -- do not indent labels within the switch statements
+}
 
 vim.o.ignorecase = true
 vim.o.smartcase = true
