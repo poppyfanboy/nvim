@@ -8,3 +8,12 @@ Plugins used:
 
 Source code of the plugins is directly included into the config, because I don't want to deal with
 plugin managers or git submodules.
+
+Update all plugins:
+
+```sh
+curl https://raw.githubusercontent.com/nvimdev/indentmini.nvim/refs/heads/main/lua/indentmini/init.lua -o ./lua/indentmini.lua
+curl https://raw.githubusercontent.com/echasnovski/mini.completion/refs/heads/main/lua/mini/completion.lua -o ./lua/mini/completion.lua
+curl https://raw.githubusercontent.com/echasnovski/mini.pick/refs/heads/main/lua/mini/pick.lua -o ./lua/mini/pick.lua
+curl https://raw.githubusercontent.com/echasnovski/mini.extra/refs/heads/main/lua/mini/extra.lua -o ./lua/mini/extra.lua
+```

@@ -693,6 +693,15 @@ local H = {}
 ---   require('mini.pick').setup({}) -- replace {} with your config table
 --- <
 MiniPick.setup = function(config)
+  -- TODO: Remove after Neovim=0.8 support is dropped
+  if vim.fn.has('nvim-0.9') == 0 then
+    vim.notify(
+      '(mini.pick) Neovim<0.9 is soft deprecated (module works but not supported).'
+        .. ' It will be deprecated after next "mini.nvim" release (module might not work).'
+        .. ' Please update your Neovim version.'
+    )
+  end
+
   -- Export module
   _G.MiniPick = MiniPick
 
@@ -1409,6 +1418,7 @@ MiniPick.builtin.help = function(local_opts, opts)
   -- Get all tags
   local help_buf = vim.api.nvim_create_buf(false, true)
   vim.bo[help_buf].buftype = 'help'
+  -- - NOTE: no dedicated buffer name because it is immediately wiped out
   local tags = vim.api.nvim_buf_call(help_buf, function() return vim.fn.taglist('.*') end)
   vim.api.nvim_buf_delete(help_buf, { force = true })
   vim.tbl_map(function(t) t.text = t.name end, tags)
@@ -2190,7 +2200,7 @@ H.picker_update = function(picker, do_match, update_window)
 end
 
 H.picker_new_buf = function()
-  local buf_id = H.create_scratch_buf()
+  local buf_id = H.create_scratch_buf('main')
   vim.bo[buf_id].filetype = 'minipick'
   return buf_id
 end
@@ -2234,7 +2244,7 @@ H.picker_compute_win_config = function(win_config, is_for_open)
     height = math.floor(0.618 * max_height),
     col = 0,
     row = max_height + (has_tabline and 1 or 0),
-    border = 'single',
+    border = (vim.fn.exists('+winborder') == 1 and vim.o.winborder ~= '') and vim.o.winborder or 'single',
     style = 'minimal',
     noautocmd = is_for_open,
     -- Use high enough value to be on top of built-in windows (pmenu, etc.)
@@ -2459,14 +2469,14 @@ H.picker_set_bordertext = function(picker)
   if not H.is_valid_win(win_id) then return end
 
   -- Compute main text managing views separately and truncating from left
-  local view_state = picker.view_state
+  local view_state, win_width = picker.view_state, vim.api.nvim_win_get_width(win_id)
   local config
   if view_state == 'main' then
     local query, caret = picker.query, picker.caret
     local before_caret = table.concat(vim.list_slice(query, 1, caret - 1), '')
     local after_caret = table.concat(vim.list_slice(query, caret, #query), '')
     local prompt_text = opts.window.prompt_prefix .. before_caret .. opts.window.prompt_cursor .. after_caret
-    local prompt = { { H.win_trim_to_width(win_id, prompt_text), 'MiniPickPrompt' } }
+    local prompt = { { H.fit_to_width(prompt_text, win_width), 'MiniPickPrompt' } }
     config = { title = prompt }
   end
 
@@ -2475,11 +2485,11 @@ H.picker_set_bordertext = function(picker)
     local stritem_cur = picker.stritems[picker.match_inds[picker.current_ind]] or ''
     -- Sanitize title
     stritem_cur = stritem_cur:gsub('%z', '│'):gsub('%s', ' ')
-    config = { title = { { H.win_trim_to_width(win_id, stritem_cur), 'MiniPickBorderText' } } }
+    config = { title = { { H.fit_to_width(' ' .. stritem_cur .. ' ', win_width), 'MiniPickBorderText' } } }
   end
 
   if view_state == 'info' then
-    config = { title = { { H.win_trim_to_width(win_id, 'Info'), 'MiniPickBorderText' } } }
+    config = { title = { { H.fit_to_width(' Info ', win_width), 'MiniPickBorderText' } } }
   end
 
   -- Compute helper footer only if Neovim version permits and not in busy
@@ -2509,7 +2519,7 @@ H.picker_compute_footer = function(picker, win_id)
   local win_width, source_width, inds_width =
     vim.api.nvim_win_get_width(win_id), vim.fn.strchars(source_name), vim.fn.strchars(inds)
 
-  local footer = { { source_name, 'MiniPickBorderText' } }
+  local footer = { { H.fit_to_width(source_name, win_width), 'MiniPickBorderText' } }
   local n_spaces_between = win_width - (source_width + inds_width)
   if n_spaces_between > 0 then
     local border_hl = picker.is_busy and 'MiniPickBorderBusy' or 'MiniPickBorder'
@@ -2564,7 +2574,7 @@ H.actions = {
 
   choose            = function(picker, _) return H.picker_choose(picker, nil)      end,
   choose_in_split   = function(picker, _) return H.picker_choose(picker, 'split')  end,
-  choose_in_tabpage = function(picker, _) return H.picker_choose(picker, 'tabnew') end,
+  choose_in_tabpage = function(picker, _) return H.picker_choose(picker, 'tab split') end,
   choose_in_vsplit  = function(picker, _) return H.picker_choose(picker, 'vsplit') end,
   choose_marked     = function(picker, _)
     local ok, res = pcall(picker.opts.source.choose_marked, MiniPick.get_picker_matches().marked)
@@ -2802,7 +2812,7 @@ H.picker_show_info = function(picker)
 
   -- Manage buffer/window/state
   local buf_id_info = picker.buffers.info
-  if not H.is_valid_buf(buf_id_info) then buf_id_info = H.create_scratch_buf() end
+  if not H.is_valid_buf(buf_id_info) then buf_id_info = H.create_scratch_buf('info') end
   picker.buffers.info = buf_id_info
 
   H.set_buflines(buf_id_info, lines)
@@ -2833,7 +2843,7 @@ H.picker_show_preview = function(picker)
   local item = H.picker_get_current_item(picker)
   if item == nil then return end
 
-  local win_id, buf_id = picker.windows.main, H.create_scratch_buf()
+  local win_id, buf_id = picker.windows.main, H.create_scratch_buf('preview')
   vim.bo[buf_id].bufhidden = 'wipe'
   H.set_winbuf(win_id, buf_id)
   preview(buf_id, item)
@@ -3388,14 +3398,20 @@ H.check_type = function(name, val, ref, allow_nil)
   H.error(string.format('`%s` should be %s, not %s', name, ref, type(val)))
 end
 
+H.set_buf_name = function(buf_id, name) vim.api.nvim_buf_set_name(buf_id, 'minipick://' .. buf_id .. '/' .. name) end
+
 H.notify = function(msg, level_name) vim.notify('(mini.pick) ' .. msg, vim.log.levels[level_name]) end
 
 H.edit = function(path, win_id)
   if type(path) ~= 'string' then return end
+  local b = vim.api.nvim_win_get_buf(win_id or 0)
+  local try_mimic_buf_reuse = (vim.fn.bufname(b) == '' and vim.bo[b].buftype ~= 'quickfix' and not vim.bo[b].modified)
+    and (#vim.fn.win_findbuf(b) == 1 and vim.deep_equal(vim.fn.getbufline(b, 1, '$'), { '' }))
   local buf_id = vim.fn.bufadd(vim.fn.fnamemodify(path, ':.'))
   -- Showing in window also loads. Use `pcall` to not error with swap messages.
   pcall(vim.api.nvim_win_set_buf, win_id or 0, buf_id)
   vim.bo[buf_id].buflisted = true
+  if try_mimic_buf_reuse then pcall(vim.api.nvim_buf_delete, b, { unload = false }) end
   return buf_id
 end
 
@@ -3411,8 +3427,9 @@ H.is_array_of = function(x, ref_type)
   return true
 end
 
-H.create_scratch_buf = function()
+H.create_scratch_buf = function(name)
   local buf_id = vim.api.nvim_create_buf(false, true)
+  H.set_buf_name(buf_id, name)
   vim.bo[buf_id].matchpairs = ''
   vim.b[buf_id].minicursorword_disable = true
   vim.b[buf_id].miniindentscope_disable = true
@@ -3500,9 +3517,9 @@ H.win_update_hl = function(win_id, new_from, new_to)
   vim.wo[win_id].winhighlight = new_winhighlight
 end
 
-H.win_trim_to_width = function(win_id, text)
-  local win_width = vim.api.nvim_win_get_width(win_id)
-  return vim.fn.strcharpart(text, vim.fn.strchars(text) - win_width, win_width)
+H.fit_to_width = function(text, width)
+  local t_width = vim.fn.strchars(text)
+  return t_width <= width and text or ('…' .. vim.fn.strcharpart(text, t_width - width + 1, width - 1))
 end
 
 H.win_get_bottom_border = function(win_id)

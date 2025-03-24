@@ -15,14 +15,17 @@ vim.o.number = true
 vim.o.relativenumber = true
 vim.o.cursorline = true
 
+local indent = 4
 vim.o.expandtab = true
-vim.o.tabstop = 4
+vim.o.tabstop = indent
 vim.o.shiftwidth = 0
 vim.o.smartindent = true
 vim.o.shiftround = true
 vim.opt.cinoptions = {
-    'l1',   -- disable the default weird indentation within the switch cases
-    ':0',   -- do not indent labels within the switch statements
+    'l1',           -- disable the default weird indentation within switch cases
+    ':0',           -- do not indent labels within switch statements
+    '+0',           -- fix indentation within compound literals with designated initializers
+    '(' .. indent,  -- indent only once on the next line after an opening parenthesis
 }
 
 vim.o.ignorecase = true
@@ -49,7 +52,12 @@ vim.o.mouse = ''
 vim.o.signcolumn = 'yes'
 
 vim.o.pumheight = 10
-vim.opt.completeopt:remove('preview')
+vim.opt.completeopt = { 'menuone', 'noselect' }
+if vim.fn.has('nvim-0.11') == 1 then
+    vim.opt.completeopt:append('fuzzy')
+end
+vim.opt.shortmess:append('c')
+vim.opt.shortmess:append('C')
 
 vim.g.netrw_winsize = 30
 vim.g.netrw_banner = 0
@@ -62,10 +70,28 @@ vim.o.imsearch = -1
 
 -- Theme and appearance
 
+function hl(highlight_group, key)
+    local value = vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID(highlight_group)), key, 'gui')
+    if value == '' then
+        return nil
+    else
+        return value
+    end
+end
+
 vim.cmd.colorscheme('retrobox')
-vim.cmd('hi IndentLine guifg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID('Whitespace')), 'fg', 'gui'))
-vim.cmd('hi IndentLineCurrent guifg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID('CursorLineNr')), 'fg', 'gui'))
-vim.cmd('hi! ColorColumn guibg=' .. vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID('CursorColumn')), 'bg', 'gui'))
+
+vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
+vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
+vim.cmd('hi! ColorColumn guibg=' .. hl('CursorColumn', 'bg'))
+vim.cmd('hi! link PmenuKindSel PmenuSel')
+
+if vim.fn.has('nvim-0.11') == 1 then
+    if hl('PmenuKind', 'fg') ~= nil and hl('PmenuSel', 'fg') ~= nil then
+        vim.cmd('hi! PmenuMatch guifg=' .. hl('PmenuKind', 'fg') .. ' gui=bold cterm=bold')
+        vim.cmd('hi! PmenuMatchSel guifg=' .. hl('PmenuSel', 'fg') .. ' gui=bold cterm=bold')
+    end
+end
 
 local ok_indentmini, indentmini = pcall(require, 'indentmini')
 if ok_indentmini then
@@ -141,6 +167,16 @@ vim.api.nvim_create_autocmd('FileType', {
 
 vim.lsp.set_log_level(vim.log.levels.OFF)
 
+local client_capabilities = vim.tbl_deep_extend(
+    'force',
+    vim.lsp.protocol.make_client_capabilities(),
+    {
+        textDocument = {
+            completion = { completionItem = { snippetSupport = false } },
+        },
+    }
+)
+
 if vim.fn.executable('clangd') == 1 then
     vim.api.nvim_create_autocmd('FileType', {
         pattern = 'c',
@@ -149,6 +185,7 @@ if vim.fn.executable('clangd') == 1 then
                 name = 'clangd',
                 cmd = { 'clangd', '--header-insertion=never' },
                 root_dir = vim.fs.root(event.buf, { '.clangd', 'compile_flags.txt', '.git' }),
+                capabilities = client_capabilities,
             })
         end,
     })
@@ -160,6 +197,23 @@ if ok_mini_completion then
         source_func = 'omnifunc',
         auto_setup = false,
         delay = { completion = 100, info = 200, signature = 10e7 },
+        window = {
+            info = { border = 'none' },
+            signature = { border = 'none' },
+        },
+        set_vim_settings = false,
+        lsp_completion = {
+            process_items = function(items, base)
+                local max_item_width = 60
+                for _, item in ipairs(items) do
+                    if vim.fn.strdisplaywidth(item.label) > max_item_width then
+                        item.label = vim.fn.strcharpart(item.label, 0, max_item_width - 1) .. '…'
+                    end
+                end
+
+                return mini_completion.default_process_items(items, base)
+            end,
+        },
     })
 end
 
@@ -167,11 +221,14 @@ vim.api.nvim_create_autocmd('LspAttach', {
     callback = function(event)
         if ok_mini_completion then
             vim.bo[event.buf].omnifunc = 'v:lua.MiniCompletion.completefunc_lsp'
+        elseif vim.fn.has('nvim-0.11') == 1 then
+            vim.lsp.completion.enable(true, event.data.client_id, event.buf, { autotrigger = true })
         end
 
         vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = event.buf })
         vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, { buffer = event.buf })
         vim.keymap.set('n', '<leader>gr', vim.lsp.buf.references, { buffer = event.buf })
+        vim.keymap.set({ 'n', 'v' }, '<leader>ff', vim.lsp.buf.format, { buffer = event.buf })
 
         vim.keymap.set({ 'i', 'n' }, '<c-s>', vim.lsp.buf.signature_help, { buffer = event.buf })
 
@@ -190,11 +247,12 @@ vim.api.nvim_create_autocmd('LspAttach', {
     end,
 })
 
+-- Keymaps
+
+-- Diagnostics
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>dp', vim.diagnostic.open_float)
-
--- Keymaps
 
 -- Faster <c-e>/<c-y> scrolling
 vim.keymap.set('n', '<c-e>', '5<c-e>')
@@ -228,9 +286,10 @@ vim.keymap.set('n', '<leader>nh', '<cmd>let @/ = ""<cr>')
 -- Exit terminal mode
 vim.keymap.set('t', '<esc><esc>', '<c-\\><c-n>')
 
--- Move between tabs
+-- Tabs manipulation
 vim.keymap.set('n', '[t', vim.cmd.tabprevious)
 vim.keymap.set('n', ']t', vim.cmd.tabnext)
+vim.keymap.set('n', '<leader>tx', vim.cmd.tabclose)
 
 -- Add empty lines above/below
 vim.keymap.set('n', '[<space>', 'mzO<esc>0D`z')
@@ -262,6 +321,16 @@ vim.keymap.set('c', '<esc>', function()
     else
         local ctrl_c_key = vim.api.nvim_replace_termcodes('<c-c>', true, false, true)
         vim.api.nvim_feedkeys(ctrl_c_key, 'n', false)
+    end
+end)
+
+-- Always insert a new line when pressing 'enter' key in insert mode, even when completion menu is
+-- opened. (Instead of doing nothing and just closing the completion menu by default?)
+vim.keymap.set('i', '<cr>', function()
+    if vim.fn.pumvisible() == 1 then
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<c-y><cr>', true, false, true), 'n', false)
+    else
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, false, true), 'n', false)
     end
 end)
 

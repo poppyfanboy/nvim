@@ -4,6 +4,7 @@ local ns = api.nvim_create_namespace('IndentLine')
 local ffi, treesitter = require('ffi'), vim.treesitter
 local opt = {
   only_current = false,
+  exclude = { 'dashboard', 'lazy', 'help', 'nofile', 'terminal', 'prompt' },
   config = {
     virt_text_pos = 'overlay',
     hl_mode = 'combine',
@@ -267,9 +268,6 @@ local function on_line(_, _, bufnr, row)
         and (row > context.range_srow and row < context.range_erow)
       local higroup = row_in_curblock and level == context.cur_inlevel and 'IndentLineCurrent'
         or 'IndentLine'
-      if opt.only_current and row_in_curblock and level ~= context.cur_inlevel then
-        higroup = 'IndentLineCurHide'
-      end
       opt.config.virt_text[1][2] = higroup
       if sp.is_empty and col > 0 then
         opt.config.virt_text_win_col = not context.mixup and i - 1 - context.leftcol
@@ -308,25 +306,18 @@ local function on_win(_, winid, bufnr, toprow, botrow)
   local pos = api.nvim_win_get_cursor(winid)
   context.currow = pos[1] - 1
   context.curcol = pos[2]
-  context.botrow = botrow
   local ok = pcall(treesitter.get_paser, bufnr)
   context.has_ts = ok
-  local currow_indent = find_in_snapshot(context.currow + 1).indent
-  find_current_range(currow_indent)
+  find_current_range(find_in_snapshot(context.currow + 1).indent)
 end
 
 return {
   setup = function(conf)
     conf = conf or {}
     opt.only_current = conf.only_current or false
-    opt.exclude = { 'dashboard', 'lazy', 'help', 'nofile', 'terminal', 'prompt' }
-    vim.list_extend(opt.exclude, conf.exclude or {})
+    opt.exclude = vim.list_extend(opt.exclude, conf.exclude or {})
     opt.config.virt_text = { { conf.char or '│' } }
     opt.minlevel = conf.minlevel or 1
     set_provider(ns, { on_win = on_win, on_line = on_line })
-    if opt.only_current and vim.opt.cursorline then
-      local bg = api.nvim_get_hl(0, { name = 'CursorLine' }).bg
-      api.nvim_set_hl(0, 'IndentLineCurHide', { fg = bg })
-    end
   end,
 }
