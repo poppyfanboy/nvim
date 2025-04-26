@@ -373,7 +373,7 @@ vim.keymap.set('v', '>', '>gv')
 
 -- Replace a word under the cursor (dot-repeatable)
 vim.keymap.set('n', '<leader>rw', '*``"_cgn')
-vim.keymap.set('v', '<leader>rw', '"zy/<c-r>z<cr>``"_cgn')
+vim.keymap.set('v', '<leader>rw', '"zy/\\M<c-r>z<cr>``"_cgn')
 
 -- MoveThroughWordsInCamelCasedIdentifiers
 vim.keymap.set('n', '<a-.>', '<cmd>set nohls<cr>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
