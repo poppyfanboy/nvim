@@ -79,7 +79,9 @@ function hl(highlight_group, key)
     end
 end
 
-vim.cmd.colorscheme('retrobox')
+-- vim.cmd('source ' .. vim.fn.stdpath('config') .. '/onehalflight.vim')
+vim.cmd('source ' .. vim.fn.stdpath('config') .. '/onehalfdark.vim')
+-- vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
 
 vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
 vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
