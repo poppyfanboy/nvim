@@ -18,3 +18,28 @@ curl https://raw.githubusercontent.com/echasnovski/mini.completion/refs/heads/ma
 curl https://raw.githubusercontent.com/echasnovski/mini.pick/refs/heads/main/lua/mini/pick.lua -o ./lua/mini/pick.lua
 curl https://raw.githubusercontent.com/echasnovski/mini.extra/refs/heads/main/lua/mini/extra.lua -o ./lua/mini/extra.lua
 ```
+
+---
+
+UPD: Ok, I give up, I hate Netrw and I also need support for debug adapters. So, I've added
+[oil.nvim](https://github.com/stevearc/oil.nvim) and
+[nvim-dap](https://github.com/mfussenegger/nvim-dap) as git submodules. They are optional and the
+core `init.lua` config is still usable on its own though.
+
+Clone the repository with submodules:
+
+```sh
+git clone --recursive https://github.com/poppyfanboy/nvim
+```
+
+Initialize submodules for an already cloned repository:
+
+```sh
+git submodule update --init --recursive
+```
+
+Update all submodules:
+
+```sh
+git submodule foreach git pull
+```

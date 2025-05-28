@@ -70,6 +70,34 @@ vim.o.imsearch = -1
 
 -- Theme and appearance
 
+-- Reset terminal colors so that the terminal emulator's colors don't affect Neovim colorschemes.
+-- Colors taken from here: https://github.com/sonph/onehalf/blob/master/vim/colors/onehalfdark.vim
+vim.o.background = 'dark'
+vim.cmd('highlight clear')
+vim.cmd('syntax reset')
+vim.g.terminal_color_0          = '#282c34'
+vim.g.terminal_color_1          = '#e06c75'
+vim.g.terminal_color_2          = '#98c379'
+vim.g.terminal_color_3          = '#e5c07b'
+vim.g.terminal_color_4          = '#61afef'
+vim.g.terminal_color_5          = '#c678dd'
+vim.g.terminal_color_6          = '#56b6c2'
+vim.g.terminal_color_7          = '#dcdfe4'
+vim.g.terminal_color_8          = '#282c34'
+vim.g.terminal_color_9          = '#e06c75'
+vim.g.terminal_color_10         = '#98c379'
+vim.g.terminal_color_11         = '#e5c07b'
+vim.g.terminal_color_12         = '#61afef'
+vim.g.terminal_color_13         = '#c678dd'
+vim.g.terminal_color_14         = '#56b6c2'
+vim.g.terminal_color_15         = '#dcdfe4'
+vim.g.terminal_color_background = '#282c34'
+vim.g.terminal_color_foreground = '#dcdfe4'
+vim.cmd('colorscheme retrobox')
+
+-- Make the background transparent.
+-- vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
+
 function hl(highlight_group, key)
     local value = vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID(highlight_group)), key, 'gui')
     if value == '' then
@@ -78,10 +106,6 @@ function hl(highlight_group, key)
         return value
     end
 end
-
--- vim.cmd('source ' .. vim.fn.stdpath('config') .. '/onehalflight.vim')
-vim.cmd('source ' .. vim.fn.stdpath('config') .. '/onehalfdark.vim')
--- vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
 
 vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
 vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
@@ -492,5 +516,59 @@ vim.keymap.set('n', '<leader>x', function()
         end
     end)
 end)
+
+local ok_dap, dap = pcall(require, 'dap')
+if ok_dap then
+    local dap_program = ''
+    local dap_args = ''
+
+    vim.api.nvim_create_user_command('DebugProgram', function()
+        dap_program = vim.fn.input(
+            'Path to executable: ',
+            vim.fn.getcwd() .. '/' .. dap_program,
+            'file'
+        )
+    end, {})
+
+    vim.api.nvim_create_user_command('DebugArgs', function()
+        dap_args = vim.fn.input('Arguments: ', dap_args)
+    end, {})
+
+    dap.adapters.gdb = {
+        type = 'executable',
+        command = 'gdb',
+        args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
+    }
+
+    dap.configurations.c = {
+        {
+            name = "Launch",
+            type = "gdb",
+            request = "launch",
+            program = function() return dap_program; end,
+            args = function() return dap_args; end,
+            cwd = "${workspaceFolder}",
+            stopAtBeginningOfMainSubprogram = true,
+        },
+    }
+
+    vim.keymap.set('n', '<leader>dc', '<cmd>DapContinue<cr>')
+    vim.keymap.set('n', '<leader>dC', dap.run_to_cursor)
+
+    vim.keymap.set('n', '<leader>df', dap.focus_frame)
+    vim.keymap.set('n', '<leader>do', '<cmd>DapStepOver<cr>')
+    vim.keymap.set('n', '<leader>dO', '<cmd>DapStepOut<cr>')
+    vim.keymap.set('n', '<leader>di', '<cmd>DapStepInto<cr>')
+
+    vim.keymap.set('n', '<leader>db', '<cmd>DapToggleBreakpoint<cr>')
+    vim.keymap.set('n', '<leader>dr', '<cmd>DapToggleRepl<cr>')
+end
+
+local ok_oil, oil = pcall(require, 'oil')
+if ok_oil then
+    require('oil').setup()
+    vim.keymap.set('n', '<leader>o', '<cmd>Oil<cr>')
+    vim.keymap.set('n', '<leader>e', '<cmd>Oil .<cr>')
+end
 
 -- vim: et:sw=4
