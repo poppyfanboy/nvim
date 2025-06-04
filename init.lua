@@ -70,30 +70,68 @@ vim.o.imsearch = -1
 
 -- Theme and appearance
 
--- Reset terminal colors so that the terminal emulator's colors don't affect Neovim colorschemes.
--- Colors taken from here: https://github.com/sonph/onehalf/blob/master/vim/colors/onehalfdark.vim
-vim.o.background = 'dark'
 vim.cmd('highlight clear')
 vim.cmd('syntax reset')
-vim.g.terminal_color_0          = '#282c34'
-vim.g.terminal_color_1          = '#e06c75'
-vim.g.terminal_color_2          = '#98c379'
-vim.g.terminal_color_3          = '#e5c07b'
-vim.g.terminal_color_4          = '#61afef'
-vim.g.terminal_color_5          = '#c678dd'
-vim.g.terminal_color_6          = '#56b6c2'
-vim.g.terminal_color_7          = '#dcdfe4'
-vim.g.terminal_color_8          = '#282c34'
-vim.g.terminal_color_9          = '#e06c75'
-vim.g.terminal_color_10         = '#98c379'
-vim.g.terminal_color_11         = '#e5c07b'
-vim.g.terminal_color_12         = '#61afef'
-vim.g.terminal_color_13         = '#c678dd'
-vim.g.terminal_color_14         = '#56b6c2'
-vim.g.terminal_color_15         = '#dcdfe4'
-vim.g.terminal_color_background = '#282c34'
-vim.g.terminal_color_foreground = '#dcdfe4'
-vim.cmd('colorscheme retrobox')
+
+local theme = 'dark'
+
+-- (Reset terminal colors so that the terminal emulator's colors don't affect Neovim colorschemes.)
+
+-- Dark theme
+if theme == 'dark' then
+    vim.o.background = 'dark'
+
+    vim.g.terminal_color_0 = '#17141f' -- black
+    vim.g.terminal_color_1 = '#ff6b7f' -- red
+    vim.g.terminal_color_2 = '#98c379' -- green
+    vim.g.terminal_color_3 = '#e6c62f' -- yellow
+    vim.g.terminal_color_4 = '#2e8fe8' -- blue
+    vim.g.terminal_color_5 = '#dc396a' -- purple
+    vim.g.terminal_color_6 = '#56b6c2' -- cyan
+    vim.g.terminal_color_7 = '#f1f1f1' -- white
+
+    vim.g.terminal_color_8  = '#495162' -- bright black
+    vim.g.terminal_color_9  = '#fe9ea1' -- bright red
+    vim.g.terminal_color_10 = '#98c379' -- bright green
+    vim.g.terminal_color_11 = '#f9e46b' -- bright yellow
+    vim.g.terminal_color_12 = '#91fff4' -- bright blue
+    vim.g.terminal_color_13 = '#da70d6' -- bright purple
+    vim.g.terminal_color_14 = '#bcf3ff' -- bright cyan
+    vim.g.terminal_color_15 = '#ffffff' -- bright white
+
+    vim.g.terminal_color_background = '#191323'
+    vim.g.terminal_color_foreground = '#cccccc'
+
+    vim.cmd('colorscheme retrobox')
+end
+
+-- Light theme
+if theme == 'light' then
+    vim.o.background = 'light'
+
+    vim.g.terminal_color_0 = '#f2e9de' -- black
+    vim.g.terminal_color_1 = '#d26a5d' -- red
+    vim.g.terminal_color_2 = '#77aab3' -- green
+    vim.g.terminal_color_3 = '#c8a299' -- yellow
+    vim.g.terminal_color_4 = '#3788be' -- blue
+    vim.g.terminal_color_5 = '#886cdb' -- purple
+    vim.g.terminal_color_6 = '#7397de' -- cyan
+    vim.g.terminal_color_7 = '#575279' -- white
+
+    vim.g.terminal_color_8  = '#6e6a86' -- bright black
+    vim.g.terminal_color_9  = '#d26a5d' -- bright red
+    vim.g.terminal_color_10 = '#77aab3' -- bright green
+    vim.g.terminal_color_11 = '#c8a299' -- bright yellow
+    vim.g.terminal_color_12 = '#3788be' -- bright blue
+    vim.g.terminal_color_13 = '#886cdb' -- bright purple
+    vim.g.terminal_color_14 = '#7397de' -- bright cyan
+    vim.g.terminal_color_15 = '#575279' -- bright white
+
+    vim.g.terminal_color_background = '#eff1f5'
+    vim.g.terminal_color_foreground = '#575279'
+
+    vim.cmd('colorscheme lunaperche')
+end
 
 -- Make the background transparent.
 -- vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
@@ -136,7 +174,14 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 
 local ok_mini_pick, mini_pick = pcall(require, 'mini.pick')
 if ok_mini_pick then
-    mini_pick.setup()
+    vim.cmd('hi link MiniPickBorder Normal')
+    vim.cmd('hi link MiniPickPrompt Normal')
+    vim.cmd('hi link MiniPickMatchRanges PmenuKind')
+
+    mini_pick.setup({
+        source = { show = mini_pick.default_show },
+        window = { prompt_caret = '│' },
+    })
     vim.keymap.set('n', '<leader>sf', '<cmd>Pick files<cr>')
     vim.keymap.set('n', '<leader>sg', '<cmd>Pick grep_live<cr>')
 end

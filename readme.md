@@ -5,7 +5,6 @@ Plugins used:
   completion items and signature help.
 - [mini.pick](https://github.com/echasnovski/mini.pick) for searching over files +
   [mini.extra](https://github.com/echasnovski/mini.extra) for searching over LSP symbols.
-- [onehalf](https://github.com/sonph/onehalf) colorscheme.
 
 Source code of the plugins is directly included into the config, because I don't want to deal with
 plugin managers or git submodules.
@@ -41,5 +40,5 @@ git submodule update --init --recursive
 Update all submodules:
 
 ```sh
-git submodule foreach git pull
+git submodule foreach git pull origin master
 ```
