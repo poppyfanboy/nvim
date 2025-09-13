@@ -52,8 +52,9 @@
 ---
 --- What it doesn't do:
 --- - Many configurable sources.
---- - Automatic mapping of `<CR>`, `<Tab>`, etc., as those tend to have highly
----   variable user expectations. See 'Helpful mappings' for suggestions.
+--- - Automatic mapping of `<CR>`, `<Tab>`, etc. Those tend to have highly
+---   variable user expectations. See 'Helpful mappings' for suggestions or
+---   use |MiniKeymap.map_multistep()| with `"pmenu_*"` built-in steps.
 ---
 --- # Dependencies ~
 ---
@@ -79,6 +80,14 @@
 --- You can override runtime config settings locally to buffer inside
 --- `vim.b.minicompletion_config` which should have same structure as
 --- `MiniCompletion.config`. See |mini.nvim-buffer-local-config| for more details.
+---
+--- # Suggested option values ~
+---
+--- Some options are set automatically (if not set before |MiniCompletion.setup()|):
+--- - 'completeopt' is set to "menuone,noselect" for less intrusive popup.
+---   To enable fuzzy matching, manually set to "menuone,noselect,fuzzy". Consider
+---   also adding "nosort" flag to preserve initial order when filtering.
+--- - 'shortmess' is appended with "c" flag for silent <C-n> fallback.
 ---
 --- # Snippets ~
 ---
@@ -109,17 +118,26 @@
 ---
 --- # Notes ~
 ---
---- - More appropriate (albeit slightly advanced) LSP completion setup is to set
----   it not on every |BufEnter| event (default), but on every attach of LSP
----   client. To do that:
----     - Use in initial config:
----     `lsp_completion = { source_func = 'omnifunc', auto_setup = false }`.
----     - In `on_attach()` of every LSP client set 'omnifunc' option to exactly
----       `v:lua.MiniCompletion.completefunc_lsp`.
+--- - A more appropriate (albeit slightly advanced) LSP completion setup is to set
+---   it not on every |BufEnter| event (default), but on every attach of LSP client.
+---   To do that:
+---     - Use in |MiniCompletion.setup()| config: >lua
 ---
---- - The `additionalTextEdits` data can come from LSP server only in response for
----   "textDocument/resolve". For these servers select completion item and wait
----   for `config.delay.info` time plus server response time to process the request.
+---       lsp_completion = { source_func = 'omnifunc', auto_setup = false }
+--- <
+---     - Set 'omnifunc' option to exactly `v:lua.MiniCompletion.completefunc_lsp`
+---       for every client attach in an |LspAttach| event. Like this: >lua
+---
+---       local on_attach = function(args)
+---         vim.bo[args.buf].omnifunc = 'v:lua.MiniCompletion.completefunc_lsp'
+---       end
+---       vim.api.nvim_create_autocmd('LspAttach', { callback = on_attach })
+--- <
+---   This setup is not default to allow simultaneous usage of filetype-specific
+---   'omnifunc' (with manual |i_CTRL-X_CTRL-O|) and automated LSP completion.
+---
+--- - Use |MiniCompletion.get_lsp_capabilities()| to get/set information about part
+---   of LSP specification supported by module. See its help for usability notes.
 ---
 --- - Uses `vim.lsp.protocol.CompletionItemKind` map in LSP step to show a readable
 ---   version of item's kind. Modify it directly to change what is displayed.
@@ -147,6 +165,9 @@
 ---
 --- # Helpful mappings ~
 ---
+--- If there is |mini.keymap| available, prefer using |MiniKeymap.map_multistep()|
+--- with `"pmenu_*"` built-in steps. See |MiniKeymap-examples| for examples.
+---
 --- To use `<Tab>` and `<S-Tab>` for navigation through completion list, make
 --- these mappings: >lua
 ---
@@ -159,34 +180,22 @@
 --- To get more consistent behavior of `<CR>`, you can use this template in
 --- your 'init.lua' to make customized mapping: >lua
 ---
----   local keycode = vim.keycode or function(x)
----     return vim.api.nvim_replace_termcodes(x, true, true, true)
----   end
----   local keys = {
----     ['cr']        = keycode('<CR>'),
----     ['ctrl-y']    = keycode('<C-y>'),
----     ['ctrl-y_cr'] = keycode('<C-y><CR>'),
----   }
----
 ---   _G.cr_action = function()
----     if vim.fn.pumvisible() ~= 0 then
----       -- If popup is visible, confirm selected item or add new line otherwise
----       local item_selected = vim.fn.complete_info()['selected'] ~= -1
----       return item_selected and keys['ctrl-y'] or keys['ctrl-y_cr']
----     else
----       -- If popup is not visible, use plain `<CR>`. You might want to customize
----       -- according to other plugins. For example, to use 'mini.pairs', replace
----       -- next line with `return require('mini.pairs').cr()`
----       return keys['cr']
----     end
+---     -- If there is selected item in popup, accept it with <C-y>
+---     if vim.fn.complete_info()['selected'] ~= -1 then return '\25' end
+---     -- Fall back to plain `<CR>`. You might want to customize according
+---     -- to other plugins. For example if 'mini.pairs' is set up, replace
+---     -- next line with `return MiniPairs.cr()`
+---     return '\r'
 ---   end
 ---
----   vim.keymap.set('i', '<CR>', 'v:lua._G.cr_action()', { expr = true })
+---   vim.keymap.set('i', '<CR>', 'v:lua.cr_action()', { expr = true })
 --- <
 --- # Highlight groups ~
 ---
 --- * `MiniCompletionActiveParameter` - signature active parameter.
----   By default displayed as plain underline.
+--- * `MiniCompletionInfoBorderOutdated` - info window border when text is outdated
+---   due to explicit delay during fast movement through candidates.
 ---
 --- To change any highlight group, modify it directly with |:highlight|.
 ---
@@ -197,6 +206,19 @@
 --- number of different scenarios and customization intentions, writing exact
 --- rules for disabling module's functionality is left to user. See
 --- |mini.nvim-disabling-recipes| for common recipes.
+
+--- Events ~
+---
+--- To allow user customization, certain |User| autocommand events are
+--- triggered under common circumstances:
+---
+--- - Info and signature help window:
+---     - `MiniCompletionWindowOpen` - after opening new window.
+---     - `MiniCompletionWindowUpdate` - after updating existing window.
+---
+---     Each event's |event-data| table contains `kind` (one of "info" or "signature")
+---     and `win_id` (affected window identifier) fields.
+---@tag MiniCompletion-events
 
 -- Overall implementation design:
 -- - Completion:
@@ -252,15 +274,6 @@ local H = {}
 ---   require('mini.completion').setup({}) -- replace {} with your config table
 --- <
 MiniCompletion.setup = function(config)
-  -- TODO: Remove after Neovim=0.8 support is dropped
-  if vim.fn.has('nvim-0.9') == 0 then
-    vim.notify(
-      '(mini.completion) Neovim<0.9 is soft deprecated (module works but not supported).'
-        .. ' It will be deprecated after next "mini.nvim" release (module might not work).'
-        .. ' Please update your Neovim version.'
-    )
-  end
-
   -- Export module
   _G.MiniCompletion = MiniCompletion
 
@@ -305,9 +318,9 @@ MiniCompletion.config = {
     auto_setup = true,
 
     -- A function which takes LSP 'textDocument/completion' response items
-    -- and word to complete. Output should be a table of the same nature as
-    -- input items. Common use case is custom filter/sort.
-    -- Default: `default_process_items`
+    -- (each with `client_id` field for item's server) and word to complete.
+    -- Output should be a table of the same nature as input. Common use case
+    -- is custom filter/sort. Default: `default_process_items`
     process_items = nil,
 
     -- A function which takes a snippet as string and inserts it at cursor.
@@ -334,10 +347,6 @@ MiniCompletion.config = {
     scroll_down = '<C-f>',
     scroll_up = '<C-b>',
   },
-
-  -- Whether to set Vim's settings for better experience (modifies
-  -- `shortmess` and `completeopt`)
-  set_vim_settings = true,
 }
 --minidoc_afterlines_end
 
@@ -402,7 +411,7 @@ end
 ---   'signature' string. Default: array containing all of them.
 MiniCompletion.stop = function(actions)
   actions = actions or { 'completion', 'info', 'signature' }
-  for _, n in pairs(actions) do
+  for _, n in ipairs(actions) do
     H.stop_actions[n]()
   end
 end
@@ -438,32 +447,42 @@ MiniCompletion.completefunc_lsp = function(findstart, base)
     return findstart == 1 and -3 or {}
   else
     if findstart == 1 then
-      H.completion.start_pos = H.get_completion_start(H.completion.lsp.result)
-      return H.completion.start_pos[2]
+      local from, to = H.get_completion_range(H.completion.lsp.result)
+      -- Cache initial completion state to revert to it when inserting snippet
+      -- NOTE: Track only length of base for performance, since this is enough
+      H.completion.init_base = { lnum = from[1], col = from[2], length = math.max(to[2] - from[2], 0) }
+      return from[2]
     end
 
-    local process_items, is_incomplete = H.get_config().lsp_completion.process_items, false
-    process_items = process_items or MiniCompletion.default_process_items
-    local words = H.process_lsp_response(H.completion.lsp.result, function(response, client_id)
+    local is_incomplete = false
+    local all_items = H.process_lsp_response(H.completion.lsp.result, function(response, client_id)
       is_incomplete = is_incomplete or (response.isIncomplete == true)
       -- Response can be `CompletionList` with 'items' field plus their
       -- defaults or `CompletionItem[]`
       local items = H.table_get(response, { 'items' }) or response
       if type(items) ~= 'table' then return {} end
+
       items = H.apply_item_defaults(items, response.itemDefaults)
-      items = process_items(items, base)
-      return H.lsp_completion_response_items_to_complete_items(items, client_id)
+      for _, item in ipairs(items) do
+        item.client_id = client_id
+      end
+      return items
     end)
+
+    -- Process items
+    local process_items = H.get_config().lsp_completion.process_items or MiniCompletion.default_process_items
+    all_items = process_items(all_items, base)
+    local candidates = H.lsp_completion_response_items_to_complete_items(all_items)
 
     H.completion.lsp.status = 'done'
     H.completion.lsp.is_incomplete = is_incomplete
 
     -- Maybe trigger fallback action
-    if vim.tbl_isempty(words) and H.completion.fallback then return H.trigger_fallback() end
+    if vim.tbl_isempty(candidates) and H.completion.fallback then return H.trigger_fallback() end
 
     -- Track from which source is current popup
     H.completion.source = 'lsp'
-    return words
+    return candidates
   end
 end
 
@@ -471,11 +490,14 @@ end
 ---
 --- Steps:
 --- - Filter and sort items according to supplied method.
+--- - Arrange items further by completion item kind according to their priority.
 --- - If |MiniIcons| is enabled, add <kind_hlgroup> based on the "lsp" category.
 ---
---- Example of forcing fuzzy matching: >lua
+--- Example of forcing fuzzy matching, filtering out `Text` items, and putting
+--- `Snippet` items last: >lua
 ---
----   local opts = { filtersort = 'fuzzy' }
+---   local kind_priority = { Text = -1, Snippet = 99 }
+---   local opts = { filtersort = 'fuzzy', kind_priority = kind_priority }
 ---   local process_items = function(items, base)
 ---     return MiniCompletion.default_process_items(items, base, opts)
 ---   end
@@ -495,16 +517,28 @@ end
 ---       - `'none'` - no filter and no sort.
 ---     If callable, should take `items` and `base` arguments and return items array.
 ---     Default: `'fuzzy'` if 'completeopt' contains "fuzzy", `'prefix'` otherwise.
+---   - <kind_priority> `(table)` - map of completion item kinds (like `Variable`,
+---     `Snippet`; see string keys of `vim.lsp.protocol.CompletionItemKind`) to
+---     their numerical priority. It will be used after applying <filtersort> to
+---     arrange by completion item kind: items with negative priority kinds will
+---     be filtered out, the rest are sorted by decreasing priority (preserving
+---     order in case of same priority).
+---     Priorities can be any number, only matters how they compare to each other.
+---     Value 100 is used for missing kinds (i.e. not all can be supplied).
+---     Default: `{}` (all equal priority).
 ---
 ---@return table Array of processed items from LSP response.
 MiniCompletion.default_process_items = function(items, base, opts)
   opts = opts or {}
 
-  -- NOTE: custom filter+sort is important with frequent `isIncomplete`
+  -- Filter+sort (important with frequent `isIncomplete`)
   local fs = opts.filtersort or (vim.o.completeopt:find('fuzzy') ~= nil and 'fuzzy' or 'prefix')
   if type(fs) == 'string' then fs = H.filtersort_methods[fs] end
   if not vim.is_callable(fs) then H.error('`filtersort` should be callable or one of "prefix", "fuzzy", "none"') end
   local res = fs(items, base)
+
+  -- Arrange by kind
+  if opts.kind_priority ~= nil then res = H.lsp_arrange_by_kind(res, opts.kind_priority) end
 
   -- Possibly add "kind" highlighting
   if _G.MiniIcons == nil then return res end
@@ -554,6 +588,86 @@ MiniCompletion.default_snippet_insert = function(snippet)
   vim.api.nvim_win_set_cursor(0, new_pos)
 end
 
+--- Get client LSP capabilities
+---
+--- Possible usages:
+--- - On Neovim>=0.11 via |vim.lsp.config()|: >lua
+---
+---   vim.lsp.config('*', {capabilities = MiniCompletion.get_lsp_capabilities()})
+--- <
+--- - Together with |vim.lsp.protocol.make_client_capabilities()| to get the full
+---   client capabilities (use |vim.tbl_deep_extend()| to merge tables).
+---
+--- - Manually execute `:=MiniCompletion.get_lsp_capabilities()` to see the info.
+---
+--- Notes:
+--- - It declares completion resolve support for `'additionalTextEdits'` (usually
+---   used for something like auto-import feature), as it is usually a more robust
+---   choice for various LSP servers. As a consequence, this requires selecting
+---   completion item and waiting for `config.delay.info` milliseconds plus server
+---   response time (i.e. until information window shows relevant text).
+---   To not have to wait after an item selection and if the server handles absent
+---   `'additionalTextEdits'` well, set `opts.resolve_additional_text_edits = false`.
+---
+---@param opts table|nil Options. Possible fields:
+---   - <resolve_additional_text_edits> `(boolean)` - whether to declare
+---     `'additionalTextEdits'` as possible to resolve in `'completionitem/resolve'`
+---     requrest. See above "Notes" section.
+---     Default: `true`.
+---
+---@return table Data about LSP capabilities supported by 'mini.completion'. Has same
+---   structure as relevant parts of |vim.lsp.protocol.make_client_capabilities()|.
+---
+---@seealso Structures of `completionClientCapabilities` and `signatureHelpClientCapabilities`
+--- at https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification
+MiniCompletion.get_lsp_capabilities = function(opts)
+  opts = vim.tbl_extend('force', { resolve_additional_text_edits = true }, opts or {})
+
+  local resolve_support = { 'detail', 'documentation' }
+  if opts.resolve_additional_text_edits then table.insert(resolve_support, 1, 'additionalTextEdits') end
+
+  return {
+    textDocument = {
+      -- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#completionClientCapabilities
+      completion = {
+        dynamicRegistration = false,
+        completionItem = {
+          snippetSupport = true,
+          commitCharactersSupport = false,
+          documentationFormat = { 'markdown', 'plaintext' },
+          deprecatedSupport = false,
+          preselectSupport = false,
+          tagSupport = { valueSet = {} },
+          insertReplaceSupport = true,
+          resolveSupport = { properties = resolve_support },
+          insertTextModeSupport = { valueSet = { 1 } },
+          labelDetailsSupport = true,
+        },
+        completionItemKind = {
+          valueSet = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 },
+        },
+        contextSupport = true,
+        insertTextMode = 1,
+        completionList = {
+          itemDefaults = { 'commitCharacters', 'editRange', 'insertTextFormat', 'insertTextMode', 'data' },
+        },
+      },
+      -- https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#signatureHelpClientCapabilities
+      signatureHelp = {
+        dynamicRegistration = false,
+        signatureInformation = {
+          documentationFormat = { 'markdown', 'plaintext' },
+          parameterInformation = {
+            labelOffsetSupport = true,
+          },
+          activeParameterSupport = true,
+        },
+        contextSupport = false,
+      },
+    },
+  }
+end
+
 -- Helper data ================================================================
 -- Module default config
 H.default_config = vim.deepcopy(MiniCompletion.config)
@@ -587,8 +701,8 @@ H.completion = {
   source = nil,
   text_changed_id = 0,
   timer = vim.loop.new_timer(),
-  lsp = { id = 0, status = nil, is_incomplete = false, result = nil, cancel_fun = nil, context = nil },
-  start_pos = {},
+  lsp = { id = 0, status = nil, is_incomplete = false, result = nil, resolved = {}, cancel_fun = nil, context = nil },
+  init_base = { lnum = nil, col = nil, length = nil },
 }
 
 -- Cache for completion item info
@@ -623,7 +737,6 @@ H.setup_config = function(config)
     H.error('`fallback_action` should be function or string, not ' .. type(config.fallback_action))
   end
   H.check_type('mappings', config.mappings, 'table')
-  H.check_type('set_vim_settings', config.set_vim_settings, 'boolean')
 
   H.check_type('delay.completion', config.delay.completion, 'number')
   H.check_type('delay.info', config.delay.info, 'number')
@@ -674,14 +787,15 @@ H.apply_config = function(config)
   map_scroll(config.mappings.scroll_down, 'down')
   map_scroll(config.mappings.scroll_up, 'up')
 
-  if config.set_vim_settings then
-    -- Don't give ins-completion-menu messages
-    vim.opt.shortmess:append('c')
-    if vim.fn.has('nvim-0.9') == 1 then vim.opt.shortmess:append('C') end
+  -- Try setting suggested option values
+  -- - More common completion behavior
+  local was_set = vim.api.nvim_get_option_info2('completeopt', { scope = 'global' }).was_set
+  if not was_set then vim.o.completeopt = 'menuone,noselect' end
 
-    -- More common completion behavior
-    vim.o.completeopt = 'menuone,noselect'
-  end
+  -- - Don't show ins-completion-menu messages ("C" is default on Neovim>=0.10)
+  local shortmess_flags = 'c' .. (vim.fn.has('nvim-0.10') == 0 and 'C' or '')
+  was_set = vim.api.nvim_get_option_info2('shortmess', { scope = 'global' }).was_set
+  if not was_set then vim.opt.shortmess:append(shortmess_flags) end
 end
 
 H.create_autocommands = function(config)
@@ -710,7 +824,8 @@ H.create_autocommands = function(config)
 end
 
 H.create_default_hl = function()
-  vim.api.nvim_set_hl(0, 'MiniCompletionActiveParameter', { default = true, underline = true })
+  vim.api.nvim_set_hl(0, 'MiniCompletionActiveParameter', { default = true, link = 'LspSignatureActiveParameter' })
+  vim.api.nvim_set_hl(0, 'MiniCompletionInfoBorderOutdated', { default = true, link = 'DiagnosticFloatingWarn' })
 end
 
 H.is_disabled = function() return vim.g.minicompletion_disable == true or vim.b.minicompletion_disable == true end
@@ -740,7 +855,8 @@ H.auto_completion = function()
     -- there is no popup. It is common when manually typing candidate followed
     -- by an LSP trigger (like ".").
     -- Keep completion source as it is needed all time when popup is visible.
-    return H.stop_completion(true)
+    -- Keep resolved candidates because they should be relevant in this route.
+    return H.stop_completion(true, false, true)
   elseif not H.is_char_keyword(vim.v.char) then
     -- Stop everything if inserted character is not appropriate. Check this
     -- after popup check to allow completion candidates to have bad characters.
@@ -783,23 +899,33 @@ end
 H.auto_info = function()
   if H.is_disabled() then return end
 
-  H.info.timer:stop()
-
-  -- Defer execution because of textlock during `CompleteChanged` event
-  -- Don't stop timer when closing info window because it is needed
-  vim.schedule(function() H.close_action_window(H.info, true) end)
-
-  -- Stop current LSP request that tries to get not current data
+  -- Stop current LSP request that tries to get already not current data
   H.cancel_lsp({ H.info })
 
   -- Update metadata before leaving to register a `CompleteChanged` event
+  H.info.timer:stop()
   H.info.event = vim.v.event
   H.info.id = H.info.id + 1
 
-  -- Don't even try to show info if nothing is selected in popup
-  if vim.tbl_isempty(H.info.event.completed_item) then return end
+  -- Stop showing window if no candidate is selected
+  local completed_item = H.info.event.completed_item or {}
+  if completed_item.word == nil then
+    return vim.schedule(function() H.close_action_window(H.info) end)
+  end
 
-  H.info.timer:start(H.get_config().delay.info, 0, vim.schedule_wrap(H.show_info_window))
+  -- Show info content without delay for visited and resolved LSP item.
+  -- Otherwise delay to not spam LSP requests on up/down navigation.
+  local item_id = H.table_get(completed_item, { 'user_data', 'lsp', 'item_id' })
+  local is_resolved = item_id == nil or H.completion.lsp.resolved[item_id] ~= nil
+  local delay = is_resolved and 0 or H.get_config().delay.info
+
+  -- Mark visually that currently shown content will be outdated for a while
+  local win_id = H.info.win_id
+  if H.is_valid_win(win_id) and delay > 0 then
+    vim.wo[win_id].winhighlight = vim.wo[win_id].winhighlight .. ',FloatBorder:MiniCompletionInfoBorderOutdated'
+  end
+  local cur_info_id = H.info.id
+  H.info.timer:start(delay, 0, function() H.show_info_window(cur_info_id) end)
 end
 
 H.auto_signature = function()
@@ -823,7 +949,7 @@ H.on_completedonepre = function()
   if H.completion.lsp.status == 'received' then return end
 
   -- Do extra actions for LSP completion items
-  local lsp_data = H.table_get(vim.v.completed_item, { 'user_data', 'nvim', 'lsp' })
+  local lsp_data = H.table_get(vim.v.completed_item, { 'user_data', 'lsp' })
   if lsp_data ~= nil then H.make_lsp_extra_actions(lsp_data) end
 
   -- Stop processes
@@ -918,13 +1044,14 @@ end
 H.default_fallback_action = function() vim.api.nvim_feedkeys(H.keys.ctrl_n, 'n', false) end
 
 -- Stop actions ---------------------------------------------------------------
-H.stop_completion = function(keep_source, keep_lsp_is_incomplete)
+H.stop_completion = function(keep_source, keep_lsp_is_incomplete, keep_lsp_resolved)
   H.completion.timer:stop()
   H.cancel_lsp({ H.completion })
   H.completion.lsp.context = nil
   H.completion.fallback, H.completion.force = true, false
-  if not keep_lsp_is_incomplete then H.completion.lsp.is_incomplete = false end
   if not keep_source then H.completion.source = nil end
+  if not keep_lsp_is_incomplete then H.completion.lsp.is_incomplete = false end
+  if not keep_lsp_resolved then H.completion.lsp.resolved = {} end
 end
 
 H.stop_info = function()
@@ -976,7 +1103,7 @@ H.is_lsp_trigger = function(char, type)
   local triggers
   local providers = { completion = 'completionProvider', signature = 'signatureHelpProvider' }
 
-  for _, client in pairs(H.get_buf_lsp_clients()) do
+  for _, client in ipairs(H.get_buf_lsp_clients()) do
     triggers = H.table_get(client, { 'server_capabilities', providers[type], 'triggerCharacters' })
     if vim.tbl_contains(triggers or {}, char) then return true end
   end
@@ -985,7 +1112,7 @@ end
 
 H.cancel_lsp = function(caches)
   caches = caches or { H.completion, H.info, H.signature }
-  for _, c in pairs(caches) do
+  for _, c in ipairs(caches) do
     if vim.tbl_contains({ 'sent', 'received' }, c.lsp.status) then
       if c.lsp.cancel_fun then c.lsp.cancel_fun() end
       c.lsp.status = 'canceled'
@@ -1024,6 +1151,22 @@ H.filtersort_methods = {
   end,
   none = function(items, _) return vim.deepcopy(items) end,
 }
+
+H.lsp_arrange_by_kind = function(items, kind_priority)
+  if type(kind_priority) ~= 'table' then H.error('`kind_priority` should be table') end
+
+  H.ensure_kind_map()
+
+  local res_raw = {}
+  for i, item in ipairs(items) do
+    local priority = kind_priority[H.kind_map[item.kind]] or 100
+    if priority >= 0 then table.insert(res_raw, { priority, i, item }) end
+  end
+
+  local compare = function(a, b) return a[1] > b[1] or (a[1] == b[1] and a[2] < b[2]) end
+  table.sort(res_raw, compare)
+  return vim.tbl_map(function(x) return x[3] end, res_raw)
+end
 
 H.lsp_get_filterword = function(x) return x.filterText or x.label end
 
@@ -1080,32 +1223,37 @@ end
 
 -- Source:
 -- https://microsoft.github.io/language-server-protocol/specifications/specification-3-14/#textDocument_completion
-H.lsp_completion_response_items_to_complete_items = function(items, client_id)
+H.lsp_completion_response_items_to_complete_items = function(items)
   if vim.tbl_count(items) == 0 then return {} end
 
   local res, item_kinds = {}, vim.lsp.protocol.CompletionItemKind
   local snippet_kind = vim.lsp.protocol.CompletionItemKind.Snippet
   local snippet_inserttextformat = vim.lsp.protocol.InsertTextFormat.Snippet
-  for _, item in pairs(items) do
+  for i, item in ipairs(items) do
     local word = H.get_completion_word(item)
 
     local is_snippet_kind = item.kind == snippet_kind
     local is_snippet_format = item.insertTextFormat == snippet_inserttextformat
-    -- Treat item as snippet only if it has tabstops. This is important to make
-    -- "implicit" expand work with LSP servers that report even regular words
-    -- as `InsertTextFormat.Snippet` (like `gopls`).
+    -- Treat item as snippet only if it has tabstops or variables. This is
+    -- important to make "implicit" expand work with LSP servers that report
+    -- even regular words as `InsertTextFormat.Snippet` (like `gopls`).
     local needs_snippet_insert = (is_snippet_kind or is_snippet_format)
-      and (word:find('[^\\]%${?%d') ~= nil or word:find('^%${?%d') ~= nil)
+      and (word:find('[^\\]%${?%w') ~= nil or word:find('^%${?%w') ~= nil)
 
     local details = item.labelDetails or {}
-    local snippet_clue = needs_snippet_insert and 'S' or ''
-    local label_detail = (details.detail or '') .. (details.description or '')
-    label_detail = snippet_clue .. ((snippet_clue ~= '' and label_detail ~= '') and ' ' or '') .. label_detail
+    -- NOTE: Using `table.concat({}, ' ')` would be cleaner but less performant
+    local snip, detail, desc = needs_snippet_insert and 'S' or '', details.detail or '', details.description or ''
+    local pad = (snip ~= '' and detail ~= '') and ' ' or ''
+    local label_detail = snip .. pad .. detail
+    pad = (label_detail ~= '' and desc ~= '') and ' ' or ''
+    label_detail = label_detail .. pad .. desc
 
-    local lsp_data = { completion_item = item, client_id = client_id, needs_snippet_insert = needs_snippet_insert }
+    local lsp_data = { item = item, item_id = i }
+    lsp_data.needs_snippet_insert = needs_snippet_insert
     table.insert(res, {
-      -- Show less for snippet items (usually less confusion)
-      word = needs_snippet_insert and item.label or word,
+      -- Show less for snippet items (usually less confusion), but preserve
+      -- built-in filtering capabilities (as it uses `word` to filter).
+      word = needs_snippet_insert and H.lsp_get_filterword(item) or word,
       abbr = item.label,
       kind = item_kinds[item.kind] or 'Unknown',
       kind_hlgroup = item.kind_hlgroup,
@@ -1115,7 +1263,7 @@ H.lsp_completion_response_items_to_complete_items = function(items, client_id)
       icase = 1,
       dup = 1,
       empty = 1,
-      user_data = { nvim = { lsp = lsp_data } },
+      user_data = { lsp = lsp_data },
     })
   end
   return res
@@ -1124,15 +1272,7 @@ end
 H.make_add_kind_hlgroup = function()
   -- Account for possible effect of `MiniIcons.tweak_lsp_kind()` which modifies
   -- only array part of `CompletionItemKind` but not "map" part
-  if H.kind_map == nil then
-    -- Cache kind map so as to not recompute it each time (as it will be called
-    -- in performance sensitive context). Assumes `tweak_lsp_kind()` is called
-    -- right after `require('mini.icons').setup()`.
-    H.kind_map = {}
-    for k, v in pairs(vim.lsp.protocol.CompletionItemKind) do
-      if type(k) == 'string' and type(v) == 'number' then H.kind_map[v] = k end
-    end
-  end
+  H.ensure_kind_map()
 
   return function(item)
     local _, hl, is_default = _G.MiniIcons.get('lsp', H.kind_map[item.kind] or 'Unknown')
@@ -1140,16 +1280,25 @@ H.make_add_kind_hlgroup = function()
   end
 end
 
+H.ensure_kind_map = function()
+  if H.kind_map ~= nil then return end
+
+  -- Cache kind map so as to not recompute it each time (as it will be called
+  -- in performance sensitive context). Assumes `tweak_lsp_kind()` is called
+  -- right after `require('mini.icons').setup()`.
+  H.kind_map = {}
+  for k, v in pairs(vim.lsp.protocol.CompletionItemKind) do
+    if type(k) == 'string' and type(v) == 'number' then H.kind_map[v] = k end
+  end
+end
+
 H.get_completion_word = function(item)
-  return H.table_get(item, { 'textEdit', 'newText' }) or item.insertText or item.label or ''
+  return H.table_get(item, { 'textEdit', 'newText' }) or item.insertText or H.lsp_get_filterword(item) or ''
 end
 
 H.make_lsp_extra_actions = function(lsp_data)
   -- Prefer resolved item over the one from 'textDocument/completion'
-  local resolved = (H.info.lsp.result or {})[lsp_data.client_id]
-  -- TODO: Use only `.err` after compatibility with Neovim=0.10 is dropped
-  local has_resolved = resolved and not (resolved.err or resolved.error) and resolved.result
-  local item = has_resolved and resolved.result or lsp_data.completion_item
+  local item = H.completion.lsp.resolved[lsp_data.item_id] or lsp_data.item
 
   if item.additionalTextEdits == nil and not lsp_data.needs_snippet_insert then return end
   local snippet = lsp_data.needs_snippet_insert and H.get_completion_word(item) or nil
@@ -1179,66 +1328,88 @@ H.make_lsp_extra_actions = function(lsp_data)
       pcall(vim.api.nvim_win_set_cursor, 0, cur)
     end
 
-    -- Try to apply additional text edits
-    H.apply_additional_text_edits(item.additionalTextEdits, lsp_data.client_id)
+    -- Try to only apply additional text edits for non-snippet items
+    if snippet == nil then return H.apply_text_edits(item.client_id, item.additionalTextEdits) end
 
-    -- Expand snippet: remove inserted word and instead insert snippet
-    if snippet == nil then return end
-    local from, to = H.completion.start_pos, vim.api.nvim_win_get_cursor(0)
+    -- Revert to initial completion state to respect text edit coordinates
+    local init_base = H.completion.init_base
+    local from, to = { init_base.lnum, init_base.col }, vim.api.nvim_win_get_cursor(0)
+    -- NOTE: actual base string should not be relevant here, only byte count
+    local prefix = string.rep('x', init_base.length)
+    pcall(vim.api.nvim_buf_set_text, 0, from[1] - 1, from[2], to[1] - 1, to[2], { prefix })
+    to = { from[1], from[2] + init_base.length }
+
+    local edit_range = H.get_lsp_edit_range({ result = { item } })
+    if edit_range ~= nil then
+      from = { edit_range.start.line + 1, edit_range.start.character }
+      to = { edit_range['end'].line + 1, edit_range['end'].character }
+    end
+
+    -- Try to apply additional text edits *after* restoring state because their
+    -- data is computed by the server at that state. Keep track of the range
+    -- that needs clearing as it might change during edits.
+    from, to = H.apply_tracked_text_edits(item.client_id, item.additionalTextEdits, from, to)
+
+    -- Expand snippet: remove base and insert at cursor
     pcall(vim.api.nvim_buf_set_text, 0, from[1] - 1, from[2], to[1] - 1, to[2], { '' })
     local insert = H.get_config().lsp_completion.snippet_insert or MiniCompletion.default_snippet_insert
     insert(snippet)
   end)
 end
 
-H.apply_additional_text_edits = function(edits, client_id)
-  -- Code originally inspired by https://github.com/neovim/neovim/issues/12310
-  if edits == nil then return end
-  client_id = client_id or 0
+H.apply_text_edits = function(client_id, text_edits)
+  if text_edits == nil then return end
+  local offset_encoding = client_id == nil and 'utf-16' or vim.lsp.get_client_by_id(client_id).offset_encoding
+  vim.lsp.util.apply_text_edits(text_edits, vim.api.nvim_get_current_buf(), offset_encoding)
+end
 
-  -- Prepare extmarks to track relevant positions after text edits
-  local start_pos = H.completion.start_pos
-  local start_extmark_id = vim.api.nvim_buf_set_extmark(0, H.ns_id, start_pos[1] - 1, start_pos[2], {})
+H.apply_tracked_text_edits = function(client_id, text_edits, from, to)
+  if text_edits == nil then return from, to end
 
+  -- Prepare extmarks to track relevant positions
   local cur_pos = vim.api.nvim_win_get_cursor(0)
-  -- - Keep track of start-cursor range as not "expanding"
-  local cursor_extmark_opts = { right_gravity = false }
-  local cursor_extmark_id = vim.api.nvim_buf_set_extmark(0, H.ns_id, cur_pos[1] - 1, cur_pos[2], cursor_extmark_opts)
+  local cursor_extmark_id = vim.api.nvim_buf_set_extmark(0, H.ns_id, cur_pos[1] - 1, cur_pos[2], {})
+
+  local from_extmark_id = vim.api.nvim_buf_set_extmark(0, H.ns_id, from[1] - 1, from[2], {})
+  local to_extmark_id = vim.api.nvim_buf_set_extmark(0, H.ns_id, to[1] - 1, to[2], {})
 
   -- Do text edits
-  local offset_encoding = vim.lsp.get_client_by_id(client_id).offset_encoding
-  vim.lsp.util.apply_text_edits(edits, vim.api.nvim_get_current_buf(), offset_encoding)
+  H.apply_text_edits(client_id, text_edits)
 
-  -- Restore relevant positions
-  local start_data = vim.api.nvim_buf_get_extmark_by_id(0, H.ns_id, start_extmark_id, {})
-  H.completion.start_pos = { start_data[1] + 1, start_data[2] }
-  pcall(vim.api.nvim_buf_del_extmark, 0, H.ns_id, start_extmark_id)
-
+  -- Restore cursor position
   local cursor_data = vim.api.nvim_buf_get_extmark_by_id(0, H.ns_id, cursor_extmark_id, {})
+  vim.api.nvim_buf_del_extmark(0, H.ns_id, cursor_extmark_id)
   pcall(vim.api.nvim_win_set_cursor, 0, { cursor_data[1] + 1, cursor_data[2] })
-  pcall(vim.api.nvim_buf_del_extmark, 0, H.ns_id, cursor_extmark_id)
+
+  -- Update in place tracked range
+  local from_data = vim.api.nvim_buf_get_extmark_by_id(0, H.ns_id, from_extmark_id, {})
+  vim.api.nvim_buf_del_extmark(0, H.ns_id, from_extmark_id)
+  local to_data = vim.api.nvim_buf_get_extmark_by_id(0, H.ns_id, to_extmark_id, {})
+  vim.api.nvim_buf_del_extmark(0, H.ns_id, to_extmark_id)
+  return { from_data[1] + 1, from_data[2] }, { to_data[1] + 1, to_data[2] }
 end
 
 -- Completion item info -------------------------------------------------------
-H.show_info_window = function()
-  local event = H.info.event
-  if not event then return end
+H.show_info_window = vim.schedule_wrap(function(info_id)
+  -- Do nothing if completion item was changed. For example, after autoinvoked
+  -- in timer with zero delay but after it there is another `CompleteChanged`
+  -- that closes popup. This only stops the timer *but* not actually cancelling
+  -- this function.
+  if H.info.id ~= info_id then return end
 
-  -- Get info lines to show
-  local lines = H.info_window_lines(H.info.id)
-  if lines == nil or H.is_whitespace(lines) then return end
+  -- Get info lines to show. Wait for resolve if returned `false`.
+  local lines = H.info_window_lines(info_id)
+  if lines == false then return end
+  if lines == nil or H.is_whitespace(lines) then lines = { '-No-info-' } end
 
   -- Ensure permanent buffer with "markdown" highlighting to display info
   H.ensure_buffer(H.info, 'item-info')
   H.ensure_highlight(H.info, 'markdown')
+  H.ensure_no_concealed_lines(H.info.bufnr)
   vim.api.nvim_buf_set_lines(H.info.bufnr, 0, -1, false, lines)
 
   -- Compute floating window options
   local opts = H.info_window_options()
-  -- Adjust to hide top/bottom code block delimiters (as they are concealed)
-  local top_is_codeblock_start = lines[1]:find('^```%S*$')
-  if top_is_codeblock_start then opts.height = opts.height - 1 end
-  if lines[#lines]:find('^```$') then opts.height = opts.height - 1 end
 
   -- Adjust section separator with better visual alternative
   lines = vim.tbl_map(function(l) return l:gsub('^%-%-%-%-*$', string.rep('─', opts.width)) end, lines)
@@ -1248,37 +1419,46 @@ H.show_info_window = function()
   vim.schedule(function()
     -- Ensure that window doesn't open when it shouldn't be
     if not (H.pumvisible() and vim.fn.mode() == 'i') then return end
-    H.open_action_window(H.info, opts)
+    H.ensure_action_window('info', opts)
     local win_id = H.info.win_id
     if not H.is_valid_win(win_id) then return end
 
     -- Hide helper syntax elements (like ``` code blocks, etc.)
     vim.wo[H.info.win_id].conceallevel = 3
 
-    -- Scroll past first line if it is a start of a code block
-    if top_is_codeblock_start then vim.api.nvim_win_call(win_id, function() vim.fn.winrestview({ topline = 2 }) end) end
+    -- Scroll past first line if it is a visible (Neovim<0.11) codeblock start
+    if vim.fn.has('nvim-0.11') == 0 and lines[1]:find('^```%S*$') ~= nil then
+      vim.api.nvim_win_call(win_id, function() vim.fn.winrestview({ topline = 2 }) end)
+    end
   end)
-end
+end)
 
 H.info_window_lines = function(info_id)
-  local completed_item = H.table_get(H.info, { 'event', 'completed_item' }) or {}
-  local lsp_data = H.table_get(completed_item, { 'user_data', 'nvim', 'lsp' })
+  local completed_item = H.info.event.completed_item
   local info = completed_item.info or ''
+  local lsp_data = H.table_get(completed_item, { 'user_data', 'lsp' })
 
-  -- If popup is not from LSP, try using 'info' field of completion item
-  if lsp_data == nil then return vim.split(info, '\n') end
+  -- If popup is not from a known LSP server, use 'info' field of complete-item
+  if lsp_data == nil or lsp_data.item.client_id == nil then return vim.split(info, '\n') end
+
+  -- Prefer reusing (without new LSP request) already resolved completion item
+  local item_id, resolved_cache = lsp_data.item_id, H.completion.lsp.resolved
+  if resolved_cache[item_id] ~= nil then return H.normalize_item_doc(resolved_cache[item_id], info) end
 
   -- Try to get documentation from LSP's latest resolved info
   if H.info.lsp.status == 'received' then
-    local lines = H.process_lsp_response(H.info.lsp.result, function(x) return H.normalize_item_doc(x, info) end)
+    local lines = H.normalize_item_doc(H.info.lsp.result, info)
     H.info.lsp.status = 'done'
     return lines
   end
 
-  -- If server doesn't support resolving completion item, reuse first response
-  local client = vim.lsp.get_client_by_id(lsp_data.client_id) or {}
+  -- If server doesn't support resolve or not known, reuse first response
+  local client = vim.lsp.get_client_by_id(lsp_data.item.client_id) or {}
   local can_resolve = H.table_get(client.server_capabilities, { 'completionProvider', 'resolveProvider' })
-  if not can_resolve then return H.normalize_item_doc(lsp_data.completion_item, info) end
+  if not can_resolve or client.id == nil then
+    resolved_cache[item_id] = lsp_data.item
+    return H.normalize_item_doc(lsp_data.item, info)
+  end
 
   -- Finally, request to resolve current completion to add more documentation
   local bufnr = vim.api.nvim_get_current_buf()
@@ -1286,20 +1466,28 @@ H.info_window_lines = function(info_id)
   H.info.lsp.id = current_id
   H.info.lsp.status = 'sent'
 
-  local cancel_fun = vim.lsp.buf_request_all(bufnr, 'completionItem/resolve', lsp_data.completion_item, function(result)
+  local cancel_fun = H.client_request(client, 'completionItem/resolve', lsp_data.item, function(err, result, _)
     -- Don't do anything if there is other LSP request in action
     if not H.is_lsp_current(H.info, current_id) then return end
 
     H.info.lsp.status = 'received'
 
-    -- Don't do anything if completion item was changed
+    -- Do nothing if completion item was changed
     if H.info.id ~= info_id then return end
 
+    -- Still use original item if there was error during resolve
+    if err ~= nil then result = result or lsp_data.item end
+
     H.info.lsp.result = result
-    H.show_info_window()
-  end)
+    -- - Cache resolved item to not have to send same request on revisit.
+    --   Do this outside of `H.info.event.completed_item` because it will not
+    --   have persistent effect as it will come fresh from Vimscript `v:event`.
+    resolved_cache[item_id] = result
+    H.show_info_window(info_id)
+  end, bufnr)
 
   H.info.lsp.cancel_fun = cancel_fun
+  return false
 end
 
 H.info_window_options = function()
@@ -1307,8 +1495,8 @@ H.info_window_options = function()
   local default_border = (vim.fn.exists('+winborder') == 1 and vim.o.winborder ~= '') and vim.o.winborder or 'single'
   local border = win_config.border or default_border
 
-  -- Compute dimensions based on lines to be displayed
-  local lines = vim.api.nvim_buf_get_lines(H.info.bufnr, 0, -1, false)
+  -- Compute dimensions based on actually visible lines to be displayed
+  local lines = H.compute_visible_md_lines(vim.api.nvim_buf_get_lines(H.info.bufnr, 0, -1, false))
   local info_height, info_width = H.floating_dimensions(lines, win_config.height, win_config.width)
 
   -- Compute position
@@ -1333,7 +1521,6 @@ H.info_window_options = function()
     info_height, info_width = H.floating_dimensions(lines, win_config.height, space)
   end
 
-  local title = vim.fn.has('nvim-0.9') == 1 and H.fit_to_width(' Info ', info_width) or nil
   return {
     relative = 'editor',
     anchor = anchor,
@@ -1344,7 +1531,7 @@ H.info_window_options = function()
     focusable = false,
     style = 'minimal',
     border = border,
-    title = title,
+    title = H.fit_to_width(' Info ', info_width),
   }
 end
 
@@ -1380,10 +1567,7 @@ H.show_signature_window = function()
   H.signature.lsp.status = 'done'
 
   -- Close window and exit if there is nothing to show
-  if not lines or H.is_whitespace(lines) then
-    H.close_action_window(H.signature)
-    return
-  end
+  if not lines or H.is_whitespace(lines) then return H.close_action_window(H.signature) end
 
   -- Ensure permanent buffer with current highlighting to display signature
   H.ensure_buffer(H.signature, 'signature-help')
@@ -1392,10 +1576,11 @@ H.show_signature_window = function()
 
   -- Add highlighting of active parameter
   local buf_id = H.signature.bufnr
+  vim.api.nvim_buf_clear_namespace(buf_id, H.ns_id, 0, -1)
   for i, hl_range in ipairs(hl_ranges) do
-    if not vim.tbl_isempty(hl_range) and hl_range.first and hl_range.last then
-      local first, last = hl_range.first, hl_range.last
-      vim.api.nvim_buf_add_highlight(buf_id, H.ns_id, 'MiniCompletionActiveParameter', i - 1, first, last)
+    if hl_range[1] ~= nil and hl_range[2] ~= nil then
+      local opts = { end_row = i - 1, end_col = hl_range[2], hl_group = 'MiniCompletionActiveParameter' }
+      vim.api.nvim_buf_set_extmark(buf_id, H.ns_id, i - 1, hl_range[1], opts)
     end
   end
 
@@ -1413,7 +1598,7 @@ H.show_signature_window = function()
   local opts = H.signature_window_opts()
 
   -- Ensure that window doesn't open when it shouldn't
-  if vim.fn.mode() == 'i' then H.open_action_window(H.signature, opts) end
+  if vim.fn.mode() == 'i' then H.ensure_action_window('signature', opts) end
 end
 
 H.signature_window_lines = function()
@@ -1422,7 +1607,7 @@ H.signature_window_lines = function()
   -- client. Each highlight range is a table which indicates (if not empty)
   -- what parameter to highlight for every LSP client's signature string.
   local lines, hl_ranges = {}, {}
-  for _, t in pairs(signature_data) do
+  for _, t in ipairs(signature_data) do
     -- `t` is allowed to be an empty table (in which case nothing is added) or
     -- a table with two entries. This ensures that `hl_range`'s integer index
     -- points to an actual line in future buffer.
@@ -1445,12 +1630,11 @@ H.process_signature_response = function(response)
   local signature = response.signatures[signature_id + 1]
 
   -- Get displayed signature label
-  local signature_label = signature.label:gsub('\n', ' ')
+  local res = { label = signature.label:gsub('\n', ' ') }
 
   -- Get start and end of active parameter (for highlighting)
-  local hl_range = {}
-  local n_params = vim.tbl_count(signature.parameters or {})
-  local has_params = signature.parameters and n_params > 0
+  local n_params = #(signature.parameters or {})
+  local has_params = type(signature.parameters) == 'table' and n_params > 0
 
   -- Take values in this order because data inside signature takes priority
   local parameter_id = signature.activeParameter or response.activeParameter or 0
@@ -1469,20 +1653,15 @@ H.process_signature_response = function(response)
     -- Compute highlight range based on type of supplied parameter label: can
     -- be string label which should be a part of signature label or direct start
     -- (inclusive) and end (exclusive) range values
-    local first, last = nil, nil
-    if type(param_label) == 'string' then
-      first, last = signature_label:find(vim.pesc(param_label))
-      -- Make zero-indexed and end-exclusive
-      if first then first = first - 1 end
-    elseif type(param_label) == 'table' then
-      first, last = unpack(param_label)
-    end
-    if first then hl_range = { first = first, last = last } end
+    local label_is_string = type(param_label) == 'string'
+    res.hl_range = label_is_string and { res.label:find(param_label, 1, true) } or (param_label or {})
+    -- - Make zero-indexed and end-exclusive
+    if res.hl_range[1] ~= nil then res.hl_range[1] = res.hl_range[1] - (label_is_string and 1 or 0) end
   end
 
   -- Return nested table because this will be a second argument of
   -- `vim.list_extend()` and the whole inner table is a target value here.
-  return { { label = signature_label, hl_range = hl_range } }
+  return { res }
 end
 
 H.signature_window_opts = function()
@@ -1514,7 +1693,6 @@ H.signature_window_opts = function()
   local bufpos = vim.api.nvim_win_get_cursor(0)
   bufpos[1] = bufpos[1] - 1
 
-  local title = vim.fn.has('nvim-0.9') == 1 and H.fit_to_width(' Signature ', width) or nil
   return {
     relative = 'win',
     bufpos = bufpos,
@@ -1526,7 +1704,7 @@ H.signature_window_opts = function()
     focusable = false,
     style = 'minimal',
     border = border,
-    title = title,
+    title = H.fit_to_width(' Signature ', width),
   }
 end
 
@@ -1562,7 +1740,7 @@ H.floating_dimensions = function(lines, max_height, max_width)
   -- This is not 100% accurate (mostly because of concealed characters and
   -- multibyte manifest into empty space at bottom), but does the job
   local lines_wrap = {}
-  for _, l in pairs(lines) do
+  for _, l in ipairs(lines) do
     vim.list_extend(lines_wrap, H.wrap_line(l, max_width))
   end
   -- Height is a number of wrapped lines truncated to maximum height
@@ -1584,18 +1762,27 @@ H.floating_dimensions = function(lines, max_height, max_width)
   return math.max(height, 1), math.max(width, 1)
 end
 
-H.open_action_window = function(cache, opts)
-  local win_id = vim.api.nvim_open_win(cache.bufnr, false, opts)
+H.ensure_action_window = function(window_kind, opts)
+  local cache = H[window_kind]
+  local is_shown = H.is_valid_win(cache.win_id)
+  if is_shown then vim.api.nvim_win_set_config(cache.win_id, opts) end
+  if not is_shown then cache.win_id = vim.api.nvim_open_win(cache.bufnr, false, opts) end
+
+  local win_id = cache.win_id
   vim.wo[win_id].breakindent = false
   vim.wo[win_id].foldenable = false
   vim.wo[win_id].foldmethod = 'manual'
   vim.wo[win_id].linebreak = true
+  vim.wo[win_id].winhighlight = vim.wo[win_id].winhighlight:gsub(',FloatBorder:MiniCompletionInfoBorderOutdated', '')
   vim.wo[win_id].wrap = true
-  cache.win_id = win_id
+
+  local event = 'MiniCompletionWindow' .. (is_shown and 'Update' or 'Open')
+  local data = { kind = window_kind, win_id = win_id }
+  vim.api.nvim_exec_autocmds('User', { pattern = event, data = data })
 end
 
-H.close_action_window = function(cache, keep_timer)
-  if not keep_timer then cache.timer:stop() end
+H.close_action_window = function(cache)
+  cache.timer:stop()
 
   if H.is_valid_win(cache.win_id) then vim.api.nvim_win_close(cache.win_id, true) end
   cache.win_id = nil
@@ -1628,37 +1815,41 @@ end
 -- immediately).
 H.pumvisible = function() return vim.fn.pumvisible() > 0 end
 
-H.get_completion_start = function(lsp_result)
+H.get_completion_range = function(lsp_result)
+  local pos = vim.api.nvim_win_get_cursor(0)
+
   -- Prefer completion start from LSP response(s)
   for _, response_data in pairs(lsp_result or {}) do
-    local server_start = H.get_completion_start_server(response_data)
-    if server_start ~= nil then return server_start end
+    local range = H.get_lsp_edit_range(response_data)
+    if range ~= nil then return { range.start.line + 1, range.start.character }, pos end
   end
 
   -- Fall back to start position of latest keyword
-  local pos = vim.api.nvim_win_get_cursor(0)
   local line = vim.api.nvim_get_current_line()
-  return { pos[1], vim.fn.match(line:sub(1, pos[2]), '\\k*$') }
+  return { pos[1], vim.fn.match(line:sub(1, pos[2]), '\\k*$') }, pos
 end
 
-H.get_completion_start_server = function(response_data, line_num)
+H.get_lsp_edit_range = function(response_data)
   -- TODO: Use only `.err` after compatibility with Neovim=0.10 is dropped
   if response_data.err or response_data.error or type(response_data.result) ~= 'table' then return end
+
+  -- Try using item defaults if they contain edit range (which can be either
+  -- `Range` or contain `insert` field of `Range` type)
+  local edit_range = H.table_get(response_data.result, { 'itemDefaults', 'editRange' })
+  if type(edit_range) == 'table' then return edit_range.insert or edit_range end
+
+  -- Try using all items to find the first one with edit range
   local items = response_data.result.items or response_data.result
-  for _, item in pairs(items) do
-    if type(item.textEdit) == 'table' then
-      -- NOTE: As per LSP spec, `textEdit` can be either `TextEdit` or `InsertReplaceEdit`
-      local range = type(item.textEdit.range) == 'table' and item.textEdit.range or item.textEdit.insert
-      -- NOTE: Return immediately, ignoring possibly several conflicting starts
-      return { range.start.line + 1, range.start.character }
-    end
+  for _, item in ipairs(items) do
+    -- Account for `textEdit` can be either `TextEdit` or `InsertReplaceEdit`
+    if type(item.textEdit) == 'table' then return item.textEdit.range or item.textEdit.insert end
   end
 end
 
 H.is_whitespace = function(s)
   if type(s) == 'string' then return s:find('^%s*$') end
   if type(s) == 'table' then
-    for _, val in pairs(s) do
+    for _, val in ipairs(s) do
       if not H.is_whitespace(val) then return false end
     end
     return true
@@ -1722,8 +1913,8 @@ H.map = function(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, opts)
 end
 
-H.normalize_item_doc = function(completion_item, fallback_info)
-  local detail, doc = completion_item.detail, completion_item.documentation
+H.normalize_item_doc = function(lsp_item, fallback_info)
+  local detail, doc = lsp_item.detail, lsp_item.documentation
   -- Fall back to explicit info only of there is no data in completion item
   -- Assume that explicit info is a code that needs highlighting
   detail = (detail == nil and doc == nil) and fallback_info or detail
@@ -1731,7 +1922,7 @@ H.normalize_item_doc = function(completion_item, fallback_info)
 
   -- Extract string content. Treat markdown and plain kinds the same.
   -- Show both `detail` and `documentation` if the first provides new info.
-  detail, doc = detail or '', (type(doc) == 'table' and doc.value or doc) or ''
+  detail, doc = detail or '', type(doc) == 'table' and (doc.value or '') or (doc or '')
   -- Wrap details in language's code block to (usually) improve highlighting
   -- This approach seems to work in 'hrsh7th/nvim-cmp'
   detail = (H.is_whitespace(detail) or doc:find(detail, 1, true) ~= nil) and '' or (H.wrap_in_codeblock(detail) .. '\n')
@@ -1743,11 +1934,35 @@ H.normalize_item_doc = function(completion_item, fallback_info)
   text = text:gsub('[ \t]+\n', '\n'):gsub('[ \t]+$', '\n')
   -- Collapse multiple empty lines, remove top and bottom padding
   text = text:gsub('\n\n+', '\n\n'):gsub('^\n+', ''):gsub('\n+$', '')
-  -- Remove padding around code blocks as they are concealed and appear empty
-  text = text:gsub('\n*(\n```%S+\n)', '%1'):gsub('(\n```\n?)\n*', '%1')
+  -- Ensure single line pads around code blocks: on Neovim<0.11 top and bottom
+  -- lines just appear empty, on Neovim>=0.11 they disappear (account for that)
+  local pad = vim.fn.has('nvim-0.11') == 1 and '\n' or ''
+  text = text:gsub('\n*(\n```%S+\n)', pad .. '%1'):gsub('(\n```\n)\n*', '%1' .. pad)
 
   if text == '' and fallback_info ~= '' then text = H.wrap_in_codeblock(fallback_info) end
   return text == '' and {} or vim.split(text, '\n')
+end
+
+-- Neovim>=0.11 has visually impactful issue of TS (markdown) highlighting:
+-- sometimes concealing extmarks are not removed. Remove after 0.11.1 release.
+-- See https://github.com/neovim/neovim/issues/33333
+H.ensure_no_concealed_lines = function(buf_id)
+  local ts_ns_id = vim.api.nvim_get_namespaces()['nvim.treesitter.highlighter']
+  pcall(vim.api.nvim_buf_clear_namespace, buf_id, ts_ns_id, 0, -1)
+end
+if vim.fn.has('nvim-0.11') == 0 then H.ensure_no_concealed_lines = function(buf_id) end end
+
+-- Neovim>=0.11 has markdown codeblock delimiters hidden. Neovim<0.11 shows
+-- them as empty line (so ignore only top and bottom for more compact view).
+H.compute_visible_md_lines = function(lines)
+  return vim.tbl_filter(function(l) return l:find('^```%S*$') == nil end, lines)
+end
+if vim.fn.has('nvim-0.11') == 0 then
+  H.compute_visible_md_lines = function(lines)
+    if lines[1]:find('^```%S*$') ~= nil then table.remove(lines, 1) end
+    if lines[#lines]:find('^```$') ~= nil then table.remove(lines, #lines) end
+    return lines
+  end
 end
 
 H.wrap_in_codeblock = function(x) return string.format('```%s\n%s\n```', vim.bo.filetype:match('^[^%.]*'), vim.trim(x)) end
@@ -1773,6 +1988,18 @@ if vim.fn.has('nvim-0.11') == 1 then
       res.context = context
       return res
     end
+  end
+end
+
+-- TODO: Remove after compatibility with Neovim=0.10 is dropped
+H.client_request = function(client, method, params, handler, bufnr)
+  local ok, request_id = client:request(method, params, handler, bufnr)
+  return ok and function() pcall(client.cancel_request, client, request_id) end or function() end
+end
+if vim.fn.has('nvim-0.11') == 0 then
+  H.client_request = function(client, method, params, handler, bufnr)
+    local ok, request_id = client.request(method, params, handler, bufnr)
+    return ok and function() pcall(client.cancel_request, request_id) end or function() end
   end
 end
 

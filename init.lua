@@ -68,6 +68,12 @@ vim.o.langmap = 'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJ
 vim.o.iminsert = 0
 vim.o.imsearch = -1
 
+vim.o.backup = true
+vim.o.backupdir = vim.fn.stdpath('data') .. '/backup//'
+vim.o.swapfile = true
+vim.o.undofile = true
+vim.o.undolevels = 2000
+
 -- Theme and appearance
 
 vim.cmd('highlight clear')
@@ -102,7 +108,8 @@ if theme == 'dark' then
     vim.g.terminal_color_background = '#191323'
     vim.g.terminal_color_foreground = '#cccccc'
 
-    vim.cmd('colorscheme retrobox')
+    vim.cmd('colorscheme lunaperche')
+    vim.cmd('hi! link MatchParen StatusLineNC')
 end
 
 -- Light theme
@@ -131,6 +138,7 @@ if theme == 'light' then
     vim.g.terminal_color_foreground = '#575279'
 
     vim.cmd('colorscheme lunaperche')
+    vim.cmd('hi! link MatchParen StatusLineNC')
 end
 
 -- Make the background transparent.
@@ -236,7 +244,7 @@ vim.api.nvim_create_autocmd('FileType', {
 
 -- LSP and completion
 
-vim.lsp.set_log_level(vim.log.levels.OFF)
+vim.lsp.log.set_level(vim.log.levels.OFF)
 
 local client_capabilities = vim.tbl_deep_extend(
     'force',
@@ -267,7 +275,7 @@ if ok_mini_completion then
     mini_completion.setup({
         source_func = 'omnifunc',
         auto_setup = false,
-        delay = { completion = 100, info = 200, signature = 10e7 },
+        delay = { completion = 100, info = 100, signature = 10e7 },
         window = {
             info = { border = 'none' },
             signature = { border = 'none' },
@@ -284,6 +292,9 @@ if ok_mini_completion then
 
                 return mini_completion.default_process_items(items, base)
             end,
+        },
+        mappings = {
+            force_twostep = '<a-s>',
         },
     })
 end
@@ -565,18 +576,27 @@ end)
 local ok_dap, dap = pcall(require, 'dap')
 if ok_dap then
     local dap_program = ''
-    local dap_args = ''
+    local dap_args = {}
 
-    vim.api.nvim_create_user_command('DebugProgram', function()
-        dap_program = vim.fn.input(
-            'Path to executable: ',
-            vim.fn.getcwd() .. '/' .. dap_program,
-            'file'
-        )
-    end, {})
+    local function prompt_dap_program()
+        if dap_program == '' then
+            dap_program =
+                vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/' .. dap_program, 'file')
+        else
+            dap_program =
+                vim.fn.input('Path to executable: ', dap_program, 'file')
+        end
+    end
+
+    vim.api.nvim_create_user_command('DebugProgram', prompt_dap_program, {})
 
     vim.api.nvim_create_user_command('DebugArgs', function()
-        dap_args = vim.fn.input('Arguments: ', dap_args)
+        if #dap_args == 0 then
+            dap_args_raw = vim.fn.input('Arguments: ')
+        else
+            dap_args_raw = vim.fn.input('Arguments: ', vim.iter(dap_args):join(' '))
+        end
+        dap_args = vim.split(dap_args_raw, ' ')
     end, {})
 
     dap.adapters.gdb = {
@@ -585,17 +605,43 @@ if ok_dap then
         args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
     }
 
-    dap.configurations.c = {
-        {
-            name = "Launch",
-            type = "gdb",
-            request = "launch",
-            program = function() return dap_program; end,
-            args = function() return dap_args; end,
-            cwd = "${workspaceFolder}",
-            stopAtBeginningOfMainSubprogram = true,
-        },
+    dap.adapters.lldb = {
+        type = 'executable',
+        command = 'lldb-dap',
     }
+
+    local gdb_config = {
+        name = 'Launch',
+        type = 'gdb',
+        request = 'launch',
+        program = function()
+            if dap_program == '' then
+                prompt_dap_program()
+            end
+            return dap_program;
+        end,
+        args = function() return dap_args; end,
+        cwd = '${workspaceFolder}',
+        stopAtBeginningOfMainSubprogram = true,
+    }
+
+    local lldb_config = {
+        name = 'Launch',
+        type = 'lldb',
+        request = 'launch',
+        program = function()
+            if dap_program == '' then
+                prompt_dap_program()
+            end
+            return dap_program;
+        end,
+        args = function() return dap_args; end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        runInTerminal = false,
+    }
+
+    dap.configurations.c = { lldb_config }
 
     vim.keymap.set('n', '<leader>dc', '<cmd>DapContinue<cr>')
     vim.keymap.set('n', '<leader>dC', dap.run_to_cursor)
@@ -614,6 +660,73 @@ if ok_oil then
     require('oil').setup()
     vim.keymap.set('n', '<leader>o', '<cmd>Oil<cr>')
     vim.keymap.set('n', '<leader>e', '<cmd>Oil .<cr>')
+end
+
+if vim.fn.has('win32') == 1 then
+    local function use_powershell_terminal()
+        vim.o.shell = 'pwsh'
+
+        -- https://github.com/LunarVim/LunarVim/blob/master/utils/installer/config_win.example.lua
+        vim.o.shellcmdflag = table.concat({
+            '-NoLogo',
+            '-NoProfile',
+            '-ExecutionPolicy RemoteSigned',
+            '-Command',
+            table.concat({
+                '[Console]::InputEncoding=[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;',
+                -- vim does not support ANSI escape codes for !-commands
+                "$PSStyle.OutputRendering='PlainText';",
+            }),
+        }, ' ')
+        vim.o.shellredir = table.concat({
+            '2>&1 | Out-File -Encoding UTF8 %s;',
+            'exit $LastExitCode;',
+        })
+        vim.o.shellpipe = table.concat({
+            '2>&1 | Out-File -Encoding UTF8 %s;',
+            'exit $LastExitCode;',
+        })
+        vim.o.shellquote = ''
+        vim.o.shellxquote = ''
+        vim.o.shellslash = false
+    end
+
+    local function use_cmd_terminal()
+        vim.o.shell = 'cmd.exe'
+        vim.o.shellcmdflag = '/s /c'
+        vim.o.shellredir = '>'
+        vim.o.shellpipe = '>'
+        vim.o.shellquote = ''
+        vim.o.shellxquote = '"'
+        vim.o.shellslash = false
+    end
+
+    local function set_bash_shell_options()
+        vim.o.shellcmdflag = '-c'
+        vim.o.shellredir = '>'
+        vim.o.shellpipe = '>'
+        vim.o.shellquote = ''
+        vim.o.shellxquote = ''
+        vim.o.shellslash = true
+    end
+
+    if vim.fn.executable('pwsh') == 1 then
+        vim.api.nvim_create_user_command('PowerShell', function()
+            use_powershell_terminal()
+        end, {})
+    end
+
+    if vim.fn.executable('cmd') == 1 then
+        vim.api.nvim_create_user_command('CMD', function()
+            use_cmd_terminal()
+        end, {})
+    end
+
+    vim.api.nvim_create_user_command('Bash', function()
+        set_bash_shell_options()
+    end, {})
+
+    use_powershell_terminal()
 end
 
 -- vim: et:sw=4
