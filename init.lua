@@ -21,12 +21,20 @@ vim.o.tabstop = indent
 vim.o.shiftwidth = 0
 vim.o.smartindent = true
 vim.o.shiftround = true
+
 vim.opt.cinoptions = {
     'l1',           -- disable the default weird indentation within switch cases
     ':0',           -- do not indent labels within switch statements
     '+0',           -- fix indentation within compound literals with designated initializers
     '(' .. indent,  -- indent only once on the next line after an opening parenthesis
+    'L0',           -- don't de-indent labels
 }
+
+-- Don't de-indent preprocessor directives
+vim.opt.cinkeys:remove('0#')
+
+vim.g.html_indent_script1 = 'auto'
+vim.g.html_indent_style1 = 'auto'
 
 vim.o.ignorecase = true
 vim.o.smartcase = true
@@ -110,6 +118,7 @@ if theme == 'dark' then
 
     vim.cmd('colorscheme lunaperche')
     vim.cmd('hi! link MatchParen StatusLineNC')
+    vim.cmd('hi! Normal guibg=#0f1419')
 end
 
 -- Light theme
@@ -246,17 +255,17 @@ vim.api.nvim_create_autocmd('FileType', {
 
 vim.lsp.log.set_level(vim.log.levels.OFF)
 
-local client_capabilities = vim.tbl_deep_extend(
-    'force',
-    vim.lsp.protocol.make_client_capabilities(),
-    {
-        textDocument = {
-            completion = { completionItem = { snippetSupport = false } },
-        },
-    }
-)
-
 if vim.fn.executable('clangd') == 1 then
+    local client_capabilities = vim.tbl_deep_extend(
+        'force',
+        vim.lsp.protocol.make_client_capabilities(),
+        {
+            textDocument = {
+                completion = { completionItem = { snippetSupport = false } },
+            },
+        }
+    )
+
     vim.api.nvim_create_autocmd('FileType', {
         pattern = 'c',
         callback = function(event)
@@ -275,10 +284,10 @@ if ok_mini_completion then
     mini_completion.setup({
         source_func = 'omnifunc',
         auto_setup = false,
-        delay = { completion = 100, info = 100, signature = 10e7 },
+        delay = { completion = 150, info = 250, signature = 10e7 },
         window = {
-            info = { border = 'none' },
-            signature = { border = 'none' },
+            info = { border = 'none', height = 15, width = 60 },
+            signature = { border = 'none', height = 15, width = 60 },
         },
         set_vim_settings = false,
         lsp_completion = {
@@ -335,6 +344,13 @@ vim.api.nvim_create_autocmd('LspAttach', {
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
 vim.keymap.set('n', '<leader>dp', vim.diagnostic.open_float)
+
+local open_floating_preview_default = vim.lsp.util.open_floating_preview
+function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
+    opts = opts or {}
+    opts.max_width = opts.max_width or 80
+    return open_floating_preview_default(contents, syntax, opts, ...)
+end
 
 -- Faster <c-e>/<c-y> scrolling
 vim.keymap.set('n', '<c-e>', '5<c-e>')
@@ -599,16 +615,20 @@ if ok_dap then
         dap_args = vim.split(dap_args_raw, ' ')
     end, {})
 
-    dap.adapters.gdb = {
-        type = 'executable',
-        command = 'gdb',
-        args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
-    }
+    if vim.fn.executable('gdb') == 1 then
+        dap.adapters.gdb = {
+            type = 'executable',
+            command = 'gdb',
+            args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
+        }
+    end
 
-    dap.adapters.lldb = {
-        type = 'executable',
-        command = 'lldb-dap',
-    }
+    if vim.fn.executable('lldb') == 1 then
+        dap.adapters.lldb = {
+            type = 'executable',
+            command = 'lldb-dap',
+        }
+    end
 
     local gdb_config = {
         name = 'Launch',
