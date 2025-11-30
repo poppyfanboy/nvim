@@ -306,6 +306,22 @@ if ok_mini_completion then
             force_twostep = '<a-s>',
         },
     })
+
+    -- Using autocompletion while recording a macro is a bad idea, because macros merely record the
+    -- sequence of buttons getting pressed, they don't save which exact completion item you've
+    -- selected.
+
+    vim.api.nvim_create_autocmd('RecordingEnter', {
+        callback = function()
+            vim.g.minicompletion_disable = true
+        end,
+    })
+
+    vim.api.nvim_create_autocmd('RecordingLeave', {
+        callback = function()
+            vim.g.minicompletion_disable = false
+        end,
+    })
 end
 
 vim.api.nvim_create_autocmd('LspAttach', {
@@ -516,6 +532,24 @@ vim.keymap.set('v', '<leader>}', '<cmd>let @z=@"<cr>c{  }<c-c>hgP<cmd>let @"=@z<
 vim.keymap.set('v', '<leader>\'', '<cmd>let @z=@"<cr>c\'\'<c-c>gP<cmd>let @"=@z<cr>')
 vim.keymap.set('v', '<leader>"', '<cmd>let @z=@"<cr>c""<c-c>gP<cmd>let @"=@z<cr>')
 vim.keymap.set('v', '<leader>`', '<cmd>let @z=@"<cr>c``<c-c>gP<cmd>let @"=@z<cr>')
+
+-- Add repeated j and k motions to the jumplist
+-- https://stackoverflow.com/questions/29746445/is-there-a-vim-command-to-undo-the-last-motion-e-g-countj-or-ctrl-f
+vim.keymap.set({ 'n', 'x' }, 'j', function()
+    if vim.v.count1 == 1 then
+        return 'j'
+    end
+
+    return "m'" .. vim.v.count .. 'j'
+end, { noremap = true, expr = true })
+
+vim.keymap.set({ 'n', 'x' }, 'k', function()
+    if vim.v.count1 == 1 then
+        return 'k'
+    end
+
+    return "m'" .. vim.v.count .. 'k'
+end, { noremap = true, expr = true })
 
 -- Quickly open or switch to a tab with a terminal
 vim.keymap.set('n', '<f1>', function()
