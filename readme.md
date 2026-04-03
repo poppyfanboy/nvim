@@ -1,4 +1,4 @@
-Plugins used:
+Plugins included directly in this repository:
 
 - [indentmini](https://github.com/nvimdev/indentmini.nvim) for indentation guides.
 - [mini.completion](https://github.com/echasnovski/mini.completion) for automatic display of
@@ -6,8 +6,8 @@ Plugins used:
 - [mini.pick](https://github.com/echasnovski/mini.pick) for searching over files +
   [mini.extra](https://github.com/echasnovski/mini.extra) for searching over LSP symbols.
 
-Source code of the plugins is directly included into the config, because I don't want to deal with
-plugin managers or git submodules.
+Source code of these plugins is directly included into the config, because I would prefer to deal
+with plugin managers or git submodules as little as possible.
 
 Update all plugins:
 
@@ -20,12 +20,12 @@ curl https://raw.githubusercontent.com/echasnovski/mini.extra/refs/heads/main/lu
 
 ---
 
-UPD: Ok, I give up, I hate Netrw and I also need support for debug adapters. So, I've added
-[oil.nvim](https://github.com/stevearc/oil.nvim) and
-[nvim-dap](https://github.com/mfussenegger/nvim-dap) as git submodules. They are optional and the
-core `init.lua` config is still usable on its own though.
+Optional plugins included via submodules:
 
-Clone the repository with submodules:
+- [oil.nvim](https://github.com/stevearc/oil.nvim) as a Netrw replacement.
+- [nvim-dap](https://github.com/mfussenegger/nvim-dap) for debugging.
+
+Clone the repository with submodules initialized automatically:
 
 ```sh
 git clone --recursive https://github.com/poppyfanboy/nvim
@@ -40,5 +40,5 @@ git submodule update --init --recursive
 Update all submodules:
 
 ```sh
-git submodule foreach git pull origin master
+git submodule update --recursive --remote
 ```

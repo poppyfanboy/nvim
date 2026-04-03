@@ -1,97 +1,11 @@
--- Options
-
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
-
-vim.o.textwidth = 100
-vim.o.colorcolumn = '100'
-vim.o.wrap = false
-vim.opt.formatoptions:append('n')   -- recognize numbered lists when wrapping
-vim.opt.formatoptions:append('t')   -- auto-wrap at textwidth while typing
-
-vim.o.sidescrolloff = 10
-
-vim.o.number = true
-vim.o.relativenumber = true
-vim.o.cursorline = true
-
-local indent = 4
-vim.o.expandtab = true
-vim.o.tabstop = indent
-vim.o.shiftwidth = 0
-vim.o.smartindent = true
-vim.o.shiftround = true
-
-vim.opt.cinoptions = {
-    'l1',           -- disable the default weird indentation within switch cases
-    ':0',           -- do not indent labels within switch statements
-    '+0',           -- fix indentation within compound literals with designated initializers
-    '(' .. indent,  -- indent only once on the next line after an opening parenthesis
-    'L0',           -- don't de-indent labels
-}
-
--- Don't de-indent preprocessor directives
-vim.opt.cinkeys:remove('0#')
-
-vim.g.html_indent_script1 = 'auto'
-vim.g.html_indent_style1 = 'auto'
-
-vim.o.ignorecase = true
-vim.o.smartcase = true
-vim.o.gdefault = true
-
-vim.o.fileformat = 'unix'
-vim.opt.fileformats = { 'unix', 'dos' }
-
-vim.o.splitbelow = true
-vim.o.splitright = true
-vim.o.splitkeep = 'screen'
-
-vim.o.list = true
-vim.opt.listchars = {
-    trail = '_',
-    tab = '-->',
-}
-
-vim.o.foldminlines = 5
-
-vim.o.mouse = ''
-
-vim.o.signcolumn = 'yes'
-
-vim.o.pumheight = 10
-vim.opt.completeopt = { 'menuone', 'noselect' }
-if vim.fn.has('nvim-0.11') == 1 then
-    vim.opt.completeopt:append('fuzzy')
-end
-vim.opt.shortmess:append('c')
-vim.opt.shortmess:append('C')
-
-vim.g.netrw_winsize = 30
-vim.g.netrw_banner = 0
-vim.g.netrw_browse_split = 4
-
-vim.o.keymap = 'russian-jcukenwin'
-vim.o.langmap = 'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJKLMNOPQRSTUVWXYZ,фисвуапршолдьтщзйкыегмцчня;abcdefghijklmnopqrstuvwxyz'
-vim.o.iminsert = 0
-vim.o.imsearch = -1
-
-vim.o.backup = true
-vim.o.backupdir = vim.fn.stdpath('data') .. '/backup//'
-vim.o.swapfile = true
-vim.o.undofile = true
-vim.o.undolevels = 2000
-
--- Theme and appearance
+local theme = 'dark'
+local transparent_background = false
 
 vim.cmd('highlight clear')
 vim.cmd('syntax reset')
 
-local theme = 'dark'
+-- Reset terminal colors so that terminal emulator's colors don't affect Neovim colorschemes.
 
--- (Reset terminal colors so that the terminal emulator's colors don't affect Neovim colorschemes.)
-
--- Dark theme
 if theme == 'dark' then
     vim.o.background = 'dark'
 
@@ -121,7 +35,6 @@ if theme == 'dark' then
     vim.cmd('hi! Normal guibg=#0f1419')
 end
 
--- Light theme
 if theme == 'light' then
     vim.o.background = 'light'
 
@@ -150,8 +63,9 @@ if theme == 'light' then
     vim.cmd('hi! link MatchParen StatusLineNC')
 end
 
--- Make the background transparent.
--- vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
+if transparent_background then
+    vim.cmd('hi Normal guibg=NONE ctermbg=NONE')
+end
 
 function hl(highlight_group, key)
     local value = vim.fn.synIDattr(vim.fn.synIDtrans(vim.fn.hlID(highlight_group)), key, 'gui')
@@ -162,8 +76,6 @@ function hl(highlight_group, key)
     end
 end
 
-vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
-vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
 vim.cmd('hi! ColorColumn guibg=' .. hl('CursorColumn', 'bg'))
 vim.cmd('hi! link PmenuKindSel PmenuSel')
 
@@ -174,11 +86,6 @@ if vim.fn.has('nvim-0.11') == 1 then
     end
 end
 
-local ok_indentmini, indentmini = pcall(require, 'indentmini')
-if ok_indentmini then
-    indentmini.setup()
-end
-
 vim.api.nvim_create_autocmd('TextYankPost', {
     group = vim.api.nvim_create_augroup('highlight_yank', {}),
     pattern = '*',
@@ -187,30 +94,94 @@ vim.api.nvim_create_autocmd('TextYankPost', {
     end,
 })
 
--- A picker plugin for selecting items from LSP, files, etc.
+vim.cmd('hi link MiniPickBorder Normal')
+vim.cmd('hi link MiniPickPrompt Normal')
+vim.cmd('hi link MiniPickMatchRanges PmenuKind')
 
-local ok_mini_pick, mini_pick = pcall(require, 'mini.pick')
-if ok_mini_pick then
-    vim.cmd('hi link MiniPickBorder Normal')
-    vim.cmd('hi link MiniPickPrompt Normal')
-    vim.cmd('hi link MiniPickMatchRanges PmenuKind')
+vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
+vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
 
-    mini_pick.setup({
-        source = { show = mini_pick.default_show },
-        window = { prompt_caret = '│' },
-    })
-    vim.keymap.set('n', '<leader>sf', '<cmd>Pick files<cr>')
-    vim.keymap.set('n', '<leader>sg', '<cmd>Pick grep_live<cr>')
+----------------------------------------------------------------------------------------------------
+
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
+
+vim.o.textwidth = 100
+vim.o.colorcolumn = '100'
+vim.o.wrap = false
+vim.opt.formatoptions:append('n')   -- recognize numbered lists when wrapping
+vim.opt.formatoptions:append('t')   -- auto-wrap at textwidth while typing
+
+vim.o.sidescrolloff = 10
+
+vim.o.number = true
+vim.o.relativenumber = true
+vim.o.cursorline = true
+
+local indent = 4
+vim.o.expandtab = true
+vim.o.tabstop = indent
+vim.o.shiftwidth = 0
+vim.o.smartindent = true
+vim.o.shiftround = true
+
+vim.opt.cinoptions = {
+    'l1',   -- disable the default weird indentation within switch cases
+    '+0',   -- fix indentation within compound literals with designated initializers
+    'L0',   -- don't de-indent labels
+    '(s',   -- indent only once on the next line after an opening parenthesis
+    'm1',   -- when typing a closing parenthesis match indentation of the matching opening one
+}
+
+-- Don't de-indent preprocessor directives
+vim.opt.cinkeys:remove('0#')
+
+vim.g.html_indent_script1 = 'auto'
+vim.g.html_indent_style1 = 'auto'
+
+vim.o.ignorecase = true
+vim.o.smartcase = true
+vim.o.gdefault = true
+
+vim.o.fileformat = 'unix'
+vim.opt.fileformats = { 'unix', 'dos' }
+
+vim.o.splitbelow = true
+vim.o.splitright = true
+vim.o.splitkeep = 'screen'
+
+vim.o.list = true
+vim.opt.listchars = {
+    trail = '_',
+    tab = '-->',
+}
+
+vim.o.mouse = ''
+vim.o.signcolumn = 'yes'
+vim.o.pumheight = 10
+
+vim.opt.completeopt = { 'menuone', 'noselect' }
+if vim.fn.has('nvim-0.11') == 1 then
+    vim.opt.completeopt:append('fuzzy')
 end
 
-local ok_mini_extra, mini_extra = pcall(require, 'mini.extra')
-if ok_mini_extra then
-    mini_extra.setup()
-    vim.keymap.set('n', '<leader>/', '<cmd>Pick buf_lines<cr>')
-    vim.keymap.set('n', '<leader>ds', '<cmd>Pick lsp scope="document_symbol"<cr>')
-end
+vim.opt.shortmess:append('c')
+vim.opt.shortmess:append('C')
 
--- Filetype
+vim.g.netrw_winsize = 30
+vim.g.netrw_banner = 0
+vim.g.netrw_browse_split = 4
+
+vim.o.keymap = 'russian-jcukenwin'
+vim.o.langmap = 'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJKLMNOPQRSTUVWXYZ,фисвуапршолдьтщзйкыегмцчня;abcdefghijklmnopqrstuvwxyz'
+vim.o.iminsert = 0
+vim.o.imsearch = -1
+
+vim.o.backup = true
+vim.o.backupdir = vim.fn.stdpath('data') .. '/backup//'
+vim.o.swapfile = true
+vim.o.undofile = true
+vim.o.undolevels = 2000
 
 vim.filetype.add({
     extension = {
@@ -242,8 +213,6 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
     end,
 })
 
--- Treesitter highlighting
-
 vim.api.nvim_create_autocmd('FileType', {
     pattern = { 'c', 'lua' },
     callback = function()
@@ -251,7 +220,66 @@ vim.api.nvim_create_autocmd('FileType', {
     end,
 })
 
--- LSP and completion
+-- Limit functionality on big files.
+-- https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bigfile.lua
+
+local bigfile_opts = {
+    size = 1.5 * 1024 * 1024,
+    line_length = 1000,
+    setup = function(ctx)
+        if vim.fn.exists(':NoMatchParen') ~= 0 then
+            vim.cmd([[NoMatchParen]])
+        end
+        vim.b.completion = false
+        vim.b.minicompletion_disable = true
+        vim.b.minianimate_disable = true
+        vim.b.minihipatterns_disable = true
+        vim.schedule(function()
+            if vim.api.nvim_buf_is_valid(ctx.buf) then
+                vim.bo[ctx.buf].syntax = ctx.ft
+            end
+        end)
+    end,
+}
+
+vim.filetype.add({
+    pattern = {
+        ['.*'] = {
+            function(path, buf)
+                if not path or not buf or vim.bo[buf].filetype == 'bigfile' then
+                    return
+                end
+                if vim.fs.normalize(path) ~= vim.fs.normalize(vim.api.nvim_buf_get_name(buf)) then
+                    return
+                end
+                local size = vim.fn.getfsize(path)
+                if size <= 0 then
+                    return
+                end
+                if size > bigfile_opts.size then
+                    return 'bigfile'
+                end
+                local lines = vim.api.nvim_buf_line_count(buf)
+                return (size - lines) / lines > bigfile_opts.line_length and 'bigfile' or nil
+            end,
+        },
+    },
+})
+
+vim.api.nvim_create_autocmd({ 'FileType' }, {
+    group = vim.api.nvim_create_augroup('snacks_bigfile', { clear = true }),
+    pattern = 'bigfile',
+    callback = function(ev)
+        vim.api.nvim_buf_call(ev.buf, function()
+            bigfile_opts.setup({
+                buf = ev.buf,
+                ft = vim.filetype.match({ buf = ev.buf }) or '',
+            })
+        end)
+    end,
+})
+
+----------------------------------------------------------------------------------------------------
 
 vim.lsp.log.set_level(vim.log.levels.OFF)
 
@@ -261,8 +289,12 @@ if vim.fn.executable('clangd') == 1 then
         vim.lsp.protocol.make_client_capabilities(),
         {
             textDocument = {
-                completion = { completionItem = { snippetSupport = false } },
+                completion = {
+                    editsNearCursor = true,
+                    completionItem = { snippetSupport = false },
+                },
             },
+            offsetEncoding = { 'utf-8', 'utf-16' },
         }
     )
 
@@ -271,62 +303,30 @@ if vim.fn.executable('clangd') == 1 then
         callback = function(event)
             vim.lsp.start({
                 name = 'clangd',
-                cmd = { 'clangd', '--header-insertion=never' },
+                cmd = {
+                    'clangd',
+                    '--header-insertion=never',
+                    '--background-index',
+                    '--pch-storage=memory',
+                    '--function-arg-placeholders=0',
+                    '-j=2',
+                },
                 root_dir = vim.fs.root(event.buf, { '.clangd', 'compile_flags.txt', '.git' }),
                 capabilities = client_capabilities,
+                init_options = {
+                    clangdFileStatus = true,
+                },
+                flags = {
+                    exit_timeout = 500,
+                },
             })
-        end,
-    })
-end
-
-local ok_mini_completion, mini_completion = pcall(require, 'mini.completion')
-if ok_mini_completion then
-    mini_completion.setup({
-        source_func = 'omnifunc',
-        auto_setup = false,
-        delay = { completion = 150, info = 250, signature = 10e7 },
-        window = {
-            info = { border = 'none', height = 15, width = 60 },
-            signature = { border = 'none', height = 15, width = 60 },
-        },
-        set_vim_settings = false,
-        lsp_completion = {
-            process_items = function(items, base)
-                local max_item_width = 60
-                for _, item in ipairs(items) do
-                    if vim.fn.strdisplaywidth(item.label) > max_item_width then
-                        item.label = vim.fn.strcharpart(item.label, 0, max_item_width - 1) .. '…'
-                    end
-                end
-
-                return mini_completion.default_process_items(items, base)
-            end,
-        },
-        mappings = {
-            force_twostep = '<a-s>',
-        },
-    })
-
-    -- Using autocompletion while recording a macro is a bad idea, because macros merely record the
-    -- sequence of buttons getting pressed, they don't save which exact completion item you've
-    -- selected.
-
-    vim.api.nvim_create_autocmd('RecordingEnter', {
-        callback = function()
-            vim.g.minicompletion_disable = true
-        end,
-    })
-
-    vim.api.nvim_create_autocmd('RecordingLeave', {
-        callback = function()
-            vim.g.minicompletion_disable = false
         end,
     })
 end
 
 vim.api.nvim_create_autocmd('LspAttach', {
     callback = function(event)
-        if ok_mini_completion then
+        if _G.MiniCompletion ~= nil then
             vim.bo[event.buf].omnifunc = 'v:lua.MiniCompletion.completefunc_lsp'
         elseif vim.fn.has('nvim-0.11') == 1 then
             vim.lsp.completion.enable(true, event.data.client_id, event.buf, { autotrigger = true })
@@ -354,7 +354,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
     end,
 })
 
--- Keymaps
+----------------------------------------------------------------------------------------------------
 
 -- Diagnostics
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
@@ -369,8 +369,8 @@ function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
 end
 
 -- Faster <c-e>/<c-y> scrolling
-vim.keymap.set('n', '<c-e>', '5<c-e>')
-vim.keymap.set('n', '<c-y>', '5<c-y>')
+vim.keymap.set('n', '<c-e>', '3<c-e>')
+vim.keymap.set('n', '<c-y>', '3<c-y>')
 
 -- Horizontal scrolling
 vim.keymap.set('n', '<a-h>', '15zh')
@@ -378,15 +378,17 @@ vim.keymap.set('n', '<a-l>', '15zl')
 vim.keymap.set('i', '<a-h>', '<c-o>15zh')
 vim.keymap.set('i', '<a-l>', '<c-o>15zl')
 
--- Quickfix
+-- Quickfix window
 vim.keymap.set('n', '<leader>co', vim.cmd.copen)
 vim.keymap.set('n', '<leader>cx', vim.cmd.cclose)
+
 vim.keymap.set('n', ']q', function()
     local ok, _ = pcall(vim.cmd.cnext)
     if not ok then
         pcall(vim.cmd.cfirst)
     end
 end)
+
 vim.keymap.set('n', '[q', function()
     local ok, _ = pcall(vim.cmd.cprevious)
     if not ok then
@@ -405,6 +407,10 @@ vim.keymap.set('n', '[t', vim.cmd.tabprevious)
 vim.keymap.set('n', ']t', vim.cmd.tabnext)
 vim.keymap.set('n', '<leader>tx', vim.cmd.tabclose)
 
+-- Cycle through buffers
+vim.keymap.set('n', '<c-left>', vim.cmd.bprevious)
+vim.keymap.set('n', '<c-right>', vim.cmd.bnext)
+
 -- Add empty lines above/below
 vim.keymap.set('n', '[<space>', 'mzO<esc>0D`z')
 vim.keymap.set('n', ']<space>', 'mzo<esc>0D`z')
@@ -418,7 +424,7 @@ vim.keymap.set('n', '<right>', '10<c-w>>')
 vim.keymap.set('n', '<up>', '5<c-w>-')
 vim.keymap.set('n', '<down>', '5<c-w>+')
 
--- Command mode: Ctrl+Enter to accept completion / Escape to cancel
+-- Command mode: Ctrl+Enter to accept completion
 vim.keymap.set('c', '<c-cr>', function()
     if vim.fn.pumvisible() == 1 then
         local confirm_key = vim.api.nvim_replace_termcodes('<c-y>', true, false, true)
@@ -428,6 +434,8 @@ vim.keymap.set('c', '<c-cr>', function()
         vim.api.nvim_feedkeys(enter_key, 'n', false)
     end
 end)
+
+-- Command mode: Escape to cancel completion
 vim.keymap.set('c', '<esc>', function()
     if vim.fn.pumvisible() == 1 then
         local cancel_key = vim.api.nvim_replace_termcodes('<c-e>', true, false, true)
@@ -449,13 +457,6 @@ vim.keymap.set('i', '<cr>', function()
 end)
 
 -- Switch between Russian and English
-vim.keymap.set('n', '<c-l>', function()
-    if vim.o.iminsert == 1 then
-        vim.o.iminsert = 0
-    else
-        vim.o.iminsert = 1
-    end
-end)
 vim.keymap.set({ 'i', 'c' }, '<c-l>', '<c-^>')
 
 -- Create/destroy treesitter folds
@@ -573,6 +574,7 @@ vim.keymap.set('n', '<f1>', function()
 
     vim.api.nvim_feedkeys('i', 'n', false)
 end)
+
 vim.keymap.set('t', '<f1>', function()
     if
         vim.g.quick_term_prev_window ~= nil and
@@ -583,138 +585,57 @@ vim.keymap.set('t', '<f1>', function()
 end)
 
 -- Delete the current buffer without changing the window layout
--- A copy-paste from here: https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bufdelete.lua
+-- https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bufdelete.lua
 vim.keymap.set('n', '<leader>x', function()
     local buf = vim.api.nvim_get_current_buf()
 
-    vim.api.nvim_buf_call(buf, function()
-        if vim.bo.modified then
+    if not vim.api.nvim_buf_is_valid(buf) then
+        return
+    end
+
+    -- Check if the buffer is modified
+    if vim.bo[buf].modified then
+        local ok, choice = pcall(
+            vim.fn.confirm,
+            ('Save changes to %q?'):format(vim.fn.bufname(buf)),
+            '&Yes\n&No\n&Cancel'
+        )
+        if not ok or choice == 0 or choice == 3 then -- 0 for <Esc>/<C-c> and 3 for Cancel
             return
+        elseif choice == 1 then -- Yes
+            vim.api.nvim_buf_call(buf, vim.cmd.write)
         end
+    end
 
-        for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-            vim.api.nvim_win_call(win, function()
-                if not vim.api.nvim_win_is_valid(win) or vim.api.nvim_win_get_buf(win) ~= buf then
-                    return
-                end
-
-                -- Try using alternate buffer
-                local alt = vim.fn.bufnr('#')
-                if alt ~= buf and vim.fn.buflisted(alt) == 1 then
-                    vim.api.nvim_win_set_buf(win, alt)
-                    return
-                end
-
-                -- Try using previous buffer
-                local has_previous = pcall(vim.cmd, 'bprevious')
-                    if has_previous and buf ~= vim.api.nvim_win_get_buf(win) then
-                    return
-                end
-
-                -- Create new listed buffer
-                local new_buf = vim.api.nvim_create_buf(true, false)
-                vim.api.nvim_win_set_buf(win, new_buf)
-            end)
-        end
-
-        if vim.api.nvim_buf_is_valid(buf) then
-            pcall(vim.cmd, 'bdelete! ' .. buf)
-        end
+    -- Get the most recently used listed buffer that is not the one being deleted,
+    local info = vim.fn.getbufinfo({ buflisted = 1 })
+    ---@param b vim.fn.getbufinfo.ret.item
+    info = vim.tbl_filter(function(b)
+        return b.bufnr ~= buf
+    end, info)
+    table.sort(info, function(a, b)
+        return a.lastused > b.lastused
     end)
+
+    local new_buf = info[1] and info[1].bufnr or vim.api.nvim_create_buf(true, false)
+
+    -- replace the buffer in all windows showing it,
+    -- trying to use the alternate buffer if possible
+    for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+        local win_buf = new_buf
+        vim.api.nvim_win_call(win, function() -- Try using alternate buffer
+            local alt = vim.fn.bufnr('#')
+            win_buf = alt >= 0 and alt ~= buf and vim.bo[alt].buflisted and alt or win_buf
+        end)
+        vim.api.nvim_win_set_buf(win, win_buf)
+    end
+
+    if vim.api.nvim_buf_is_valid(buf) then
+        pcall(vim.cmd, 'bdelete! ' .. buf)
+    end
 end)
 
-local ok_dap, dap = pcall(require, 'dap')
-if ok_dap then
-    local dap_program = ''
-    local dap_args = {}
-
-    local function prompt_dap_program()
-        if dap_program == '' then
-            dap_program =
-                vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/' .. dap_program, 'file')
-        else
-            dap_program =
-                vim.fn.input('Path to executable: ', dap_program, 'file')
-        end
-    end
-
-    vim.api.nvim_create_user_command('DebugProgram', prompt_dap_program, {})
-
-    vim.api.nvim_create_user_command('DebugArgs', function()
-        if #dap_args == 0 then
-            dap_args_raw = vim.fn.input('Arguments: ')
-        else
-            dap_args_raw = vim.fn.input('Arguments: ', vim.iter(dap_args):join(' '))
-        end
-        dap_args = vim.split(dap_args_raw, ' ')
-    end, {})
-
-    if vim.fn.executable('gdb') == 1 then
-        dap.adapters.gdb = {
-            type = 'executable',
-            command = 'gdb',
-            args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
-        }
-    end
-
-    if vim.fn.executable('lldb') == 1 then
-        dap.adapters.lldb = {
-            type = 'executable',
-            command = 'lldb-dap',
-        }
-    end
-
-    local gdb_config = {
-        name = 'Launch',
-        type = 'gdb',
-        request = 'launch',
-        program = function()
-            if dap_program == '' then
-                prompt_dap_program()
-            end
-            return dap_program;
-        end,
-        args = function() return dap_args; end,
-        cwd = '${workspaceFolder}',
-        stopAtBeginningOfMainSubprogram = true,
-    }
-
-    local lldb_config = {
-        name = 'Launch',
-        type = 'lldb',
-        request = 'launch',
-        program = function()
-            if dap_program == '' then
-                prompt_dap_program()
-            end
-            return dap_program;
-        end,
-        args = function() return dap_args; end,
-        cwd = '${workspaceFolder}',
-        stopOnEntry = false,
-        runInTerminal = false,
-    }
-
-    dap.configurations.c = { lldb_config }
-
-    vim.keymap.set('n', '<leader>dc', '<cmd>DapContinue<cr>')
-    vim.keymap.set('n', '<leader>dC', dap.run_to_cursor)
-
-    vim.keymap.set('n', '<leader>df', dap.focus_frame)
-    vim.keymap.set('n', '<leader>do', '<cmd>DapStepOver<cr>')
-    vim.keymap.set('n', '<leader>dO', '<cmd>DapStepOut<cr>')
-    vim.keymap.set('n', '<leader>di', '<cmd>DapStepInto<cr>')
-
-    vim.keymap.set('n', '<leader>db', '<cmd>DapToggleBreakpoint<cr>')
-    vim.keymap.set('n', '<leader>dr', '<cmd>DapToggleRepl<cr>')
-end
-
-local ok_oil, oil = pcall(require, 'oil')
-if ok_oil then
-    require('oil').setup()
-    vim.keymap.set('n', '<leader>o', '<cmd>Oil<cr>')
-    vim.keymap.set('n', '<leader>e', '<cmd>Oil .<cr>')
-end
+----------------------------------------------------------------------------------------------------
 
 if vim.fn.has('win32') == 1 then
     local function use_powershell_terminal()
@@ -764,23 +685,207 @@ if vim.fn.has('win32') == 1 then
         vim.o.shellslash = true
     end
 
-    if vim.fn.executable('pwsh') == 1 then
-        vim.api.nvim_create_user_command('PowerShell', function()
-            use_powershell_terminal()
-        end, {})
-    end
+    vim.api.nvim_create_user_command('PowerShell', function()
+        use_powershell_terminal()
+    end, {})
 
-    if vim.fn.executable('cmd') == 1 then
-        vim.api.nvim_create_user_command('CMD', function()
-            use_cmd_terminal()
-        end, {})
-    end
+    vim.api.nvim_create_user_command('CMD', function()
+        use_cmd_terminal()
+    end, {})
 
     vim.api.nvim_create_user_command('Bash', function()
         set_bash_shell_options()
     end, {})
 
     use_powershell_terminal()
+end
+
+----------------------------------------------------------------------------------------------------
+
+local ok_indentmini, indentmini = pcall(require, 'indentmini')
+if ok_indentmini then
+    indentmini.setup({ exclude = { 'bigfile' } })
+end
+
+local ok_oil, oil = pcall(require, 'oil')
+if ok_oil then
+    require('oil').setup()
+    vim.keymap.set('n', '<leader>o', '<cmd>Oil<cr>')
+    vim.keymap.set('n', '<leader>e', '<cmd>Oil .<cr>')
+end
+
+local ok_mini_pick, mini_pick = pcall(require, 'mini.pick')
+if ok_mini_pick then
+    mini_pick.setup({
+        source = { show = mini_pick.default_show },
+        window = { prompt_caret = '│' },
+        mappings = { choose_marked = '<c-q>' },
+    })
+
+    vim.keymap.set('n', '<leader>sf', '<cmd>Pick files<cr>')
+    vim.keymap.set('n', '<leader>sg', '<cmd>Pick grep_live<cr>')
+end
+
+local ok_mini_extra, mini_extra = pcall(require, 'mini.extra')
+if ok_mini_extra then
+    mini_extra.setup()
+    vim.keymap.set('n', '<leader>/', '<cmd>Pick buf_lines<cr>')
+    vim.keymap.set('n', '<leader>ds', '<cmd>Pick lsp scope="document_symbol"<cr>')
+end
+
+local ok_mini_completion, mini_completion = pcall(require, 'mini.completion')
+if ok_mini_completion then
+    mini_completion.setup({
+        delay = { completion = 150, info = 250, signature = 10e7 },
+        window = {
+            info = { border = 'none', height = 15, width = 60 },
+            signature = { border = 'none', height = 15, width = 60 },
+        },
+        set_vim_settings = false,
+        lsp_completion = {
+            source_func = 'omnifunc',
+            auto_setup = false,
+            process_items = function(items, base)
+                local max_item_width = 60
+                for _, item in ipairs(items) do
+                    if vim.fn.strdisplaywidth(item.label) > max_item_width then
+                        item.label = vim.fn.strcharpart(item.label, 0, max_item_width - 1) .. '…'
+                    end
+                end
+
+                return mini_completion.default_process_items(items, base)
+            end,
+        },
+        mappings = {
+            force_twostep = '<c-x>',
+            force_fallback = '<a-x>',
+        },
+    })
+
+    -- Using autocompletion while recording a macro is a bad idea, because macros merely record the
+    -- sequence of buttons getting pressed, they don't save which exact completion item you've
+    -- selected.
+
+    vim.api.nvim_create_autocmd('RecordingEnter', {
+        callback = function()
+            vim.g.minicompletion_disable = true
+        end,
+    })
+
+    vim.api.nvim_create_autocmd('RecordingLeave', {
+        callback = function()
+            vim.g.minicompletion_disable = false
+        end,
+    })
+end
+
+local ok_dap, dap = pcall(require, 'dap')
+if ok_dap then
+    local dap_program = ''
+    local dap_args = {}
+
+    local function prompt_dap_program()
+        if dap_program == '' then
+            dap_program = vim.fn.input(
+                'Path to executable: ',
+                vim.fn.getcwd() .. '/' .. dap_program,
+                'file'
+            )
+        else
+            dap_program = vim.fn.input(
+                'Path to executable: ',
+                dap_program,
+                'file'
+            )
+        end
+    end
+
+    vim.api.nvim_create_user_command('DebugProgram', prompt_dap_program, {})
+
+    vim.api.nvim_create_user_command('DebugArgs', function()
+        if #dap_args == 0 then
+            dap_args_raw = vim.fn.input('Arguments: ')
+        else
+            dap_args_raw = vim.fn.input('Arguments: ', vim.iter(dap_args):join(' '))
+        end
+        dap_args = vim.split(dap_args_raw, ' ')
+    end, {})
+
+    dap.adapters.gdb = {
+        type = 'executable',
+        command = 'gdb',
+        args = { '--interpreter=dap', '--eval-command', 'set print pretty on' },
+    }
+
+    local gdb_config = {
+        name = 'Launch',
+        type = 'gdb',
+        request = 'launch',
+        program = function()
+            if dap_program == '' then
+                prompt_dap_program()
+            end
+            return dap_program;
+        end,
+        args = function() return dap_args; end,
+        cwd = '${workspaceFolder}',
+        stopAtBeginningOfMainSubprogram = true,
+    }
+
+    dap.adapters.codelldb = {
+        type = 'executable',
+        type = 'server',
+        port = '${port}',
+        host = '127.0.0.1',
+        executable = {
+            command = 'codelldb',
+            args = {
+                '--port', '${port}',
+                '--settings', vim.json.encode { showDisassembly = 'never' },
+            },
+        },
+    }
+
+    local codelldb_config = {
+        name = 'Launch',
+        type = 'codelldb',
+        request = 'launch',
+        program = function()
+            if dap_program == '' then
+                prompt_dap_program()
+            end
+            return dap_program;
+        end,
+        args = function() return dap_args; end,
+        cwd = '${workspaceFolder}',
+    }
+
+    dap.configurations.c = { codelldb_config }
+
+    vim.keymap.set('n', '<leader>dc', '<cmd>DapContinue<cr>')
+    vim.keymap.set('n', '<leader>dC', dap.run_to_cursor)
+
+    vim.keymap.set('n', '<leader>df', dap.focus_frame)
+    vim.keymap.set('n', '<leader>do', '<cmd>DapStepOver<cr>')
+    vim.keymap.set('n', '<f2>', '<cmd>DapStepOver<cr>')
+    vim.keymap.set('n', '<leader>dO', '<cmd>DapStepOut<cr>')
+    vim.keymap.set('n', '<leader>di', '<cmd>DapStepInto<cr>')
+
+    vim.keymap.set('n', '<leader>db', '<cmd>DapToggleBreakpoint<cr>')
+    vim.keymap.set('n', '<leader>dr', '<cmd>DapToggleRepl<cr>')
+
+    vim.keymap.set('n', '<leader>k', function()
+        require('dap.ui.widgets').hover()
+    end)
+
+    vim.api.nvim_create_user_command('DapFrames', function()
+        local widgets = require('dap.ui.widgets')
+        widgets.centered_float(widgets.frames)
+    end, {})
+    vim.api.nvim_create_user_command('DapScopes', function()
+        local widgets = require('dap.ui.widgets')
+        widgets.centered_float(widgets.scopes)
+    end, {})
 end
 
 -- vim: et:sw=4
