@@ -86,20 +86,24 @@ if vim.fn.has('nvim-0.11') == 1 then
     end
 end
 
-vim.api.nvim_create_autocmd('TextYankPost', {
-    group = vim.api.nvim_create_augroup('highlight_yank', {}),
-    pattern = '*',
-    callback = function()
-        vim.highlight.on_yank({ higroup = 'IncSearch', timeout = 200 })
-    end,
-})
-
 vim.cmd('hi link MiniPickBorder Normal')
 vim.cmd('hi link MiniPickPrompt Normal')
 vim.cmd('hi link MiniPickMatchRanges PmenuKind')
 
 vim.cmd('hi! IndentLine guifg=' .. hl('LineNr', 'fg'))
 vim.cmd('hi! IndentLineCurrent guifg=' .. (hl('CursorLineNr', 'fg') or hl('Normal', 'fg')))
+
+if vim.hl == nil then
+    vim.hl = vim.highlight
+end
+
+vim.api.nvim_create_autocmd('TextYankPost', {
+    group = vim.api.nvim_create_augroup('highlight_yank', {}),
+    pattern = '*',
+    callback = function()
+        vim.hl.on_yank({ higroup = 'IncSearch', timeout = 200 })
+    end,
+})
 
 ----------------------------------------------------------------------------------------------------
 
@@ -118,26 +122,15 @@ vim.o.number = true
 vim.o.relativenumber = true
 vim.o.cursorline = true
 
-local indent = 4
 vim.o.expandtab = true
-vim.o.tabstop = indent
+vim.o.tabstop = 4
 vim.o.shiftwidth = 0
 vim.o.smartindent = true
 vim.o.shiftround = true
 
-vim.opt.cinoptions = {
-    'l1',   -- disable the default weird indentation within switch cases
-    '+0',   -- fix indentation within compound literals with designated initializers
-    'L0',   -- don't de-indent labels
-    '(s',   -- indent only once on the next line after an opening parenthesis
-    'm1',   -- when typing a closing parenthesis match indentation of the matching opening one
-}
-
--- Don't de-indent preprocessor directives
-vim.opt.cinkeys:remove('0#')
-
-vim.g.html_indent_script1 = 'auto'
-vim.g.html_indent_style1 = 'auto'
+vim.g.html_indent_script1 = 'inc'
+vim.g.html_indent_style1 = 'inc'
+vim.g.html_indent_attribute = 1
 
 vim.o.ignorecase = true
 vim.o.smartcase = true
@@ -173,7 +166,11 @@ vim.g.netrw_banner = 0
 vim.g.netrw_browse_split = 4
 
 vim.o.keymap = 'russian-jcukenwin'
-vim.o.langmap = 'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJKLMNOPQRSTUVWXYZ,фисвуапршолдьтщзйкыегмцчня;abcdefghijklmnopqrstuvwxyz'
+vim.o.langmap = table.concat({
+    'ФИСВУАПРШОЛДЬТЩЗЙКЫЕГМЦЧНЯ;ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    'фисвуапршолдьтщзйкыегмцчня;abcdefghijklmnopqrstuvwxyz',
+}, ',')
+
 vim.o.iminsert = 0
 vim.o.imsearch = -1
 
@@ -192,15 +189,31 @@ vim.filetype.add({
 vim.api.nvim_create_autocmd('FileType', {
     pattern = 'c',
     callback = function(event)
-        vim.bo[event.buf].commentstring = '// %s'
+        vim.opt_local.commentstring = '// %s'
+        vim.opt_local.cindent = false
     end,
 })
 
-vim.api.nvim_create_autocmd({ 'FileType' }, {
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = 'html',
+    callback = function(event)
+        vim.opt_local.textwidth = 120
+        vim.opt_local.colorcolumn = '120'
+    end,
+})
+
+vim.api.nvim_create_autocmd('FileType', {
+    pattern = 'javascript',
+    callback = function(event)
+        vim.opt_local.cinoptions = { 'j1', 'J1' }
+    end,
+})
+
+vim.api.nvim_create_autocmd('FileType', {
     pattern = 'yaml',
     callback = function(event)
-        vim.bo[event.buf].tabstop = 2
-        vim.bo[event.buf].expandtab = true
+        vim.opt_local.tabstop = 2
+        vim.opt_local.expandtab = true
     end,
 })
 
@@ -219,6 +232,8 @@ vim.api.nvim_create_autocmd('FileType', {
         pcall(vim.treesitter.start)
     end,
 })
+
+----------------------------------------------------------------------------------------------------
 
 -- Limit functionality on big files.
 -- https://github.com/folke/snacks.nvim/blob/main/lua/snacks/bigfile.lua
@@ -266,7 +281,7 @@ vim.filetype.add({
     },
 })
 
-vim.api.nvim_create_autocmd({ 'FileType' }, {
+vim.api.nvim_create_autocmd('FileType', {
     group = vim.api.nvim_create_augroup('snacks_bigfile', { clear = true }),
     pattern = 'bigfile',
     callback = function(ev)
@@ -351,14 +366,26 @@ vim.api.nvim_create_autocmd('LspAttach', {
         vim.keymap.set('n', '<leader>i', function()
             vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
         end, { buffer = event.buf })
+
+        -- Disable annoying highlighting of color values in CSS files.
+        if vim.lsp.document_color ~= nil then
+            vim.lsp.document_color.enable(false)
+        end
     end,
 })
 
 ----------------------------------------------------------------------------------------------------
 
 -- Diagnostics
-vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
-vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
+
+if vim.fn.has('nvim-0.12') == 1 then
+    vim.keymap.set('n', '[d', function() vim.diagnostic.jump({ count = -1 }) end)
+    vim.keymap.set('n', ']d', function() vim.diagnostic.jump({ count = 1 }) end)
+else
+    vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
+    vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
+end
+
 vim.keymap.set('n', '<leader>dp', vim.diagnostic.open_float)
 
 local open_floating_preview_default = vim.lsp.util.open_floating_preview
@@ -379,6 +406,7 @@ vim.keymap.set('i', '<a-h>', '<c-o>15zh')
 vim.keymap.set('i', '<a-l>', '<c-o>15zl')
 
 -- Quickfix window
+
 vim.keymap.set('n', '<leader>co', vim.cmd.copen)
 vim.keymap.set('n', '<leader>cx', vim.cmd.cclose)
 
@@ -446,16 +474,6 @@ vim.keymap.set('c', '<esc>', function()
     end
 end)
 
--- Always insert a new line when pressing 'enter' key in insert mode, even when completion menu is
--- opened. (Instead of doing nothing and just closing the completion menu by default?)
-vim.keymap.set('i', '<cr>', function()
-    if vim.fn.pumvisible() == 1 then
-        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<c-y><cr>', true, false, true), 'n', false)
-    else
-        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<cr>', true, false, true), 'n', false)
-    end
-end)
-
 -- Switch between Russian and English
 vim.keymap.set({ 'i', 'c' }, '<c-l>', '<c-^>')
 
@@ -491,16 +509,72 @@ vim.keymap.set('n', '<leader>rw', '*``"_cgn')
 vim.keymap.set('v', '<leader>rw', '"zy/\\M<c-r>z<cr>``"_cgn')
 
 -- MoveThroughWordsInCamelCasedIdentifiers
-vim.keymap.set('n', '<a-.>', '<cmd>set nohls<cr>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
-vim.keymap.set('n', '<a-,>', '<cmd>set nohls<cr>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
-vim.keymap.set('v', '<a-.>', '<cmd>set nohls<cr><esc>/\\v(\\u|.>|<)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
-vim.keymap.set('v', '<a-,>', '<cmd>set nohls<cr><esc>?\\v(\\u|.<|>)<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
+
+vim.keymap.set('n', '<a-.>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[/\v(\u|.>|<)<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+}), { silent = true })
+
+vim.keymap.set('n', '<a-,>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[?\v(\u|.<|>)<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+}), { silent = true })
+
+vim.keymap.set('v', '<a-.>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[<esc>]],
+    [[/\v(\u|.>|<)<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+    [[mzgv`z]],
+}), { silent = true })
+
+vim.keymap.set('v', '<a-,>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[<esc>]],
+    [[?\v(\u|.<|>)<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+    [[mzgv`z]],
+}), { silent = true })
 
 -- Move_though_words_in_snake_cased_identifiers
-vim.keymap.set('n', '<a-n>', '<cmd>set nohls<cr>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
-vim.keymap.set('n', '<a-p>', '<cmd>set nohls<cr>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>', { silent = true })
-vim.keymap.set('v', '<a-n>', '<cmd>set nohls<cr><esc>/\\v(_|..>|.<|$)/s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
-vim.keymap.set('v', '<a-p>', '<cmd>set nohls<cr><esc>?\\v(_|.<|.>|$)?s+1<cr><cmd>let @/ = ""<cr><cmd>set hls<cr>mzgv`z', { silent = true })
+
+vim.keymap.set('n', '<a-n>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[/\v(_|..>|.<|$)/s+1<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+}), { silent = true })
+
+vim.keymap.set('n', '<a-p>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[?\v(_|.<|.>|$)?s+1<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+}), { silent = true })
+
+vim.keymap.set('v', '<a-n>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[<esc>]],
+    [[/\v(_|..>|.<|$)/s+1<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+    [[mzgv`z]],
+}), { silent = true })
+
+vim.keymap.set('v', '<a-p>', table.concat({
+    [[<cmd>set nohls<cr>]],
+    [[<esc>]],
+    [[?\v(_|.<|.>|$)?s+1<cr>]],
+    [[<cmd>let @/ = ""<cr>]],
+    [[<cmd>set hls<cr>]],
+    [[mzgv`z]],
+}), { silent = true })
 
 -- Open the folder containing the current file in Netrw
 vim.keymap.set('n', '<leader>o', '<cmd>Lex %:p:h<cr>')
@@ -526,16 +600,59 @@ vim.api.nvim_create_autocmd('FileType', {
 })
 
 -- Surround with X keymaps
-vim.keymap.set('v', '<leader>(', '<cmd>let @z=@"<cr>c()<c-c>gP<cmd>let @"=@z<cr>')
-vim.keymap.set('v', '<leader>[', '<cmd>let @z=@"<cr>c[]<c-c>gP<cmd>let @"=@z<cr>')
-vim.keymap.set('v', '<leader>{', '<cmd>let @z=@"<cr>c{}<c-c>gP<cmd>let @"=@z<cr>')
-vim.keymap.set('v', '<leader>}', '<cmd>let @z=@"<cr>c{  }<c-c>hgP<cmd>let @"=@z<cr>l')
-vim.keymap.set('v', '<leader>\'', '<cmd>let @z=@"<cr>c\'\'<c-c>gP<cmd>let @"=@z<cr>')
-vim.keymap.set('v', '<leader>"', '<cmd>let @z=@"<cr>c""<c-c>gP<cmd>let @"=@z<cr>')
-vim.keymap.set('v', '<leader>`', '<cmd>let @z=@"<cr>c``<c-c>gP<cmd>let @"=@z<cr>')
+
+vim.keymap.set('v', '<leader>(', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c()<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
+
+vim.keymap.set('v', '<leader>[', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c[]<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
+
+vim.keymap.set('v', '<leader>{', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c{}<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
+
+vim.keymap.set('v', '<leader>}', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c{  }<c-c>]],
+    [[hgP]],
+    [[<cmd>let @"=@z<cr>l]],
+}))
+
+vim.keymap.set('v', '<leader>\'', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c''<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
+
+vim.keymap.set('v', '<leader>"', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c""<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
+
+vim.keymap.set('v', '<leader>`', table.concat({
+    [[<cmd>let @z=@"<cr>]],
+    [[c``<c-c>]],
+    [[gP]],
+    [[<cmd>let @"=@z<cr>]],
+}))
 
 -- Add repeated j and k motions to the jumplist
 -- https://stackoverflow.com/questions/29746445/is-there-a-vim-command-to-undo-the-last-motion-e-g-countj-or-ctrl-f
+
 vim.keymap.set({ 'n', 'x' }, 'j', function()
     if vim.v.count1 == 1 then
         return 'j'
@@ -553,6 +670,7 @@ vim.keymap.set({ 'n', 'x' }, 'k', function()
 end, { noremap = true, expr = true })
 
 -- Quickly open or switch to a tab with a terminal
+
 vim.keymap.set('n', '<f1>', function()
     vim.g.quick_term_prev_window = vim.fn.win_getid()
 
